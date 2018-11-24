@@ -4,13 +4,17 @@ import ReactDom from 'react-dom';
 
 import { Login, lookupLogins, getSite, getLoginsDb, resetLogins } from './Logins.js';
 import { AuthenticatorModal } from './Authenticator.js';
+import { parseKiteAppUrl } from './polyfill/Common.js';
 
 import './Portal.scss';
 
 const E = React.createElement
 
 function appManifestAddress(app) {
-    return `${app}/manifest.json`;
+    var kiteApp = parseKiteAppUrl(app)
+    if ( !kiteApp.isKite )
+        throw new TypeError(`${app} is not a kite+app:// URL`)
+    return `http://${kiteApp.app}/manifest.json`;
 }
 
 class KiteMissingApps {
