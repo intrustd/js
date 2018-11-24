@@ -11,10 +11,7 @@ import './Portal.scss';
 const E = React.createElement
 
 function appManifestAddress(app) {
-    var kiteApp = parseKiteAppUrl(app)
-    if ( !kiteApp.isKite )
-        throw new TypeError(`${app} is not a kite+app:// URL`)
-    return `http://${kiteApp.app}/manifest.json`;
+    return `https://${app}/manifest.json`;
 }
 
 class KiteMissingApps {
