@@ -7,6 +7,8 @@ import { AuthenticatorModal } from './Authenticator.js';
 
 import './Portal.scss';
 
+const E = React.createElement
+
 function appManifestAddress(app) {
     return `${app}/manifest.json`;
 }
@@ -87,7 +89,6 @@ class PortalModal extends React.Component {
     }
 
     render() {
-        const E = React.createElement
         var explanation = 'Authenticating...'
 
         switch ( this.props.state ) {
@@ -363,7 +364,6 @@ class PermissionsModal extends React.Component {
     }
 
     render() {
-        const E = React.createElement;
         var body
         var loading = false
 
