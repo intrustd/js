@@ -144,7 +144,11 @@ class AppInstallItem extends React.Component {
 
     render() {
         if ( this.state.appInfo ) {
-            return E('div', { className: 'kite-app' })
+            return E('div', { className: 'kite-app' },
+                     E('img', { className: 'kite-app-icon',
+                                src: this.state.appInfo.icon }),
+                     E('span', { className: 'kite-app-name' },
+                       this.state.appInfo.name))
         } else {
             var error
 
@@ -244,7 +248,6 @@ export class PortalAuthenticator extends EventTarget('open', 'error') {
         ReactDom.render(React.createElement(PortalModal,
                                             { state: this.state,
                                               error: this.error,
-                                              missingApps: this.missingApps,
                                               doPopup: this.doPopup,
                                               requestNewLogin: this.requestNewLogin.bind(this) }),
                         this.modalContainer)
@@ -641,6 +644,7 @@ export class PortalServer {
                                                 { key: 'permissions',
                                                   state: this.state,
                                                   logins: this.logins || [],
+                                                  missingApps: this.missingApps,
                                                   permissions: this.request.permissions,
                                                   onResetLogins: this.onResetLogins.bind(this),
                                                   onSuccess: this.onAccept.bind(this)
