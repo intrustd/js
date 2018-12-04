@@ -1,12 +1,39 @@
 .kite-hidden-iframe {display: none; }
 
-.kite-app--loading {
-    .kite-app-indicator {
-        float: left;
+.kite-app-icon {
+    max-width: 64px;
+    max-height: 64px;
+}
+
+.kite-app {
+    &:before {
+        display: inline-block;
+        margin: 0 0 0 10px;
+        content: '\f058';
+        visibility: hidden;
+        width: 24px;
+        height: 24px;
+        font-family: 'FontAwesome';
     }
 
-    .kite-app-error-indicator {
-        float: right;
-        color: red;
+    &.kite-app--loading {
+        .kite-app-indicator {
+            float: left;
+        }
+
+        .kite-app-error-indicator {
+            float: right;
+            color: red;
+        }
     }
+
+    &.kite-app--selected:before {
+        visibility: visible;
+    }
+}
+
+.kite-list li.kite-app-container--selected {
+    background-color: #207ce5;
+    color: white;
+
 }

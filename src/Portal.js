@@ -1,6 +1,7 @@
 import { EventTarget } from 'event-target-shim';
 import React from 'react';
 import ReactDom from 'react-dom';
+import { Set } from 'immutable';
 
 import { Login, lookupLogins, getSite, getLoginsDb, resetLogins } from './Logins.js';
 import { AuthenticatorModal } from './Authenticator.js';
@@ -138,24 +139,47 @@ class AppInstallItem extends React.Component {
         fetch(appManifestAddress(this.props.app))
             .then((r) => {
                 if ( r.status == 200 )
-                    r.json().then((mf) => this.setState({ appInfo: mf }))
-                            .catch((e) => this.setState({ error: e }))
+                    return r.json().then((mf) => this.setState({ appInfo: mf }))
             })
             .catch((e) => this.setState({error: e}))
     }
 
     render() {
         if ( this.state.appInfo ) {
-            return E('div', { className: 'kite-app' },
+            var selectedClass = ''
+            var progress
+
+            if ( this.props.selected )
+                selectedClass = 'kite-app--selected'
+
+            if ( this.props.installing ) {
+                selectedClass = 'kite-app--installing'
+
+                if ( this.props.progress.finished )
+                    progress = 'Complete'
+                else if ( this.props.progress.error ) {
+                    progress = E('div', { className: 'uk-alert uk-alert-danger' }, `${this.props.progress.error}`);
+                } else {
+                    progress = [
+                        E('div', {className: 'progress-message'}, this.props.progress.message),
+                        E('progress', { className: 'uk-progress',
+                                        value: this.props.progress.complete,
+                                        max: this.props.progress.total })
+                    ]
+                }
+            }
+
+            return E('div', { className: `kite-app ${selectedClass}` },
                      E('img', { className: 'kite-app-icon',
                                 src: this.state.appInfo.icon }),
                      E('span', { className: 'kite-app-name' },
-                       this.state.appInfo.name))
+                       this.state.appInfo.name),
+                     progress)
         } else {
             var error
 
             if ( this.state.error ) {
-                error = E('i', { className: 'kite-app-error-indicator fa fa-fw fa-alert',
+                error = E('i', { className: 'kite-app-error-indicator fa fa-fw fa-warning',
                                  'uk-tooltip': `${this.state.error}`})
             }
 
@@ -163,7 +187,7 @@ class AppInstallItem extends React.Component {
                      error,
                      E('i', { className: 'fa fa-fw fa-spin fa-circle-o-notch kite-app-indicator' }),
                      E('span', { className: 'kite-app-loading-message' },
-                       `Loading ${this.props.app}`))
+                       this.props.app))
         }
     }
 }
@@ -361,7 +385,7 @@ export const PortalDisplay = {
 class PermissionsModal extends React.Component {
     constructor() {
         super()
-        this.state = {}
+        this.state = { deselectedApps: Set() }
     }
 
     render() {
@@ -397,15 +421,67 @@ class PermissionsModal extends React.Component {
                          'Accept')) ]
             break;
 
+        case PortalServerState.InstallingApplications:
+        case PortalServerState.ApplicationInstallError:
+        case PortalServerState.ApplicationsSuccess:
+            body = [ E('div', { className: 'kite-form-row', key: 'app-list' },
+                       E('ul', { className: 'kite-list kite-app-list' },
+                         this.props.missingApps.map(
+                             (a) => {
+                                 if ( this.props.appProgress.hasOwnProperty(a) ) {
+                                     return E('li', { key: a,
+                                                      className: 'kite-app-container--installing' },
+                                              E(AppInstallItem, { app: a, installing: true,
+                                                                  progress: this.props.appProgress[a] }));
+                                 }
+                             }))
+                      ),
+
+                     (this.props.state == PortalServerState.ApplicationInstallError ?
+                      E('div', { className: 'kite-form-row', key: 'confirm-list' },
+                        E('button', { className: 'uk-button uk-button-danger' },
+                          E('i', { className: 'fa fa-fw fa-retry',
+                                   onClick: this.props.installApps }, 'Retry'))) : null ),
+
+                     (this.props.state == PortalServerState.ApplicationsSuccess ?
+                      E('div', { className: 'kite-form-row', key: 'confirm-list' },
+                        E('button', { className: 'uk-button uk-button-primary' },
+                          E('i', { className: 'fa fa-fw fa-check',
+                                   onClick: this.props.onRetryAfterInstall },
+                            'Continue'))) : null)
+                   ];
+
+            break;
+
         case PortalServerState.InstallAppsRequest:
-            body = [ E('p', { className: 'kite-auth-explainer' },
+            var missingAppsSet = Set(this.props.missingApps)
+            var appsLeft = missingAppsSet.isSuperset(this.state.deselectedApps) && !this.state.deselectedApps.isSuperset(missingAppsSet)
+
+            body = [ E('p', { className: 'kite-auth-explainer', key: 'request-explainer' },
                        'The following applications are not installed on your appliance. Would you like to install them now?'),
-                     E('div', { className: 'kite-form-row' },
+                     E('div', { className: 'kite-form-row', key: 'apps-list' },
                        E('ul', { className: 'kite-list kite-app-list' },
                          this.props.missingApps.map(
                              (a) =>
-                                 E('li', { key: a },
-                                   E(AppInstallItem, { app: a })))))
+                                 E('li', { key: a,
+                                           onClick: () => {
+                                               var isSelected = !this.state.deselectedApps.contains(a);
+                                               if ( isSelected )
+                                                   this.setState({deselectedApps: this.state.deselectedApps.add(a)})
+                                               else
+                                                   this.setState({deselectedApps: this.state.deselectedApps.delete(a)})
+                                           },
+                                           className: (!this.state.deselectedApps.contains(a)) ? 'kite-app-container--selected' : '' },
+                                   E(AppInstallItem, { app: a, selected: !this.state.deselectedApps.contains(a) }))))),
+                     E('div', { className: 'kite-form-row' },
+                       E('button', { type: 'button',
+                                     className: 'uk-button uk-button-primary',
+                                     onClick: () => {
+                                         var toInstall = this.state.deselectedApps.reduce((a, app) => a.delete(app), missingAppsSet)
+                                         this.props.installApps(toInstall.toArray())
+                                     },
+                                     disabled: !appsLeft },
+                         'Install'))
                    ]
 
             break;
@@ -430,7 +506,10 @@ export const PortalServerState = {
     DisplayLogins: Symbol('DisplayLogins'),
     MintingToken: Symbol('MintingToken'),
     Error: Symbol('Error'),
-    InstallAppsRequest: Symbol('InstallAppsRequest')
+    InstallAppsRequest: Symbol('InstallAppsRequest'),
+    InstallingApplications: Symbol('InstallingApplications'),
+    ApplicationInstallError: Symbol('ApplicationInstallError'),
+    ApplicationsSuccess: Symbol('ApplicationsSuccess')
 }
 
 export class PortalServer {
@@ -626,6 +705,99 @@ export class PortalServer {
         this.updateModal();
     }
 
+    startAppInstallation(app, progressFunc) {
+        return new Promise((resolve, reject) => {
+            var processResponse =
+                ({state, progress, status_url}) => {
+                    console.log("Got response", state, progress, status_url)
+
+                    if ( state == 'installed' ) {
+                        progressFunc({finished: true})
+                        resolve()
+                    } else if ( state == 'error' ) {
+                        progressFunc({error: progress.message})
+                        reject(progress.message)
+                    } else {
+                        progressFunc(progress)
+
+                        var retries = 0
+                        var poll = () => {
+                            fetch(`kite+app://admin.flywithkite.com${status_url}`, {method: 'GET', kiteClient: this.flockClient,
+                                                                                    cache: 'no-store'})
+                                .then((r) => {
+                                    if ( r.status == 200 ) {
+                                        retries = 0
+                                        return r.json().then(processResponse)
+                                    } else {
+                                        retries += 1
+                                        if (retries > 7)
+                                            return Promise.reject(`Bad status: ${r.status}`)
+                                        else
+                                            timeout = setTimeout(poll, 2000)
+                                    }})
+                        }
+
+                        setTimeout(poll, 2000)
+                    }
+                }
+            fetch(`kite+app://admin.flywithkite.com/me/applications/${app}`,
+                  { method: 'PUT', kiteClient: this.flockClient })
+                .then((r) => {
+                    if ( r.status == 200 || r.status == 202 )
+                        return r.json().then(processResponse)
+                    else
+                        return Promise.reject(`Bad status: ${r.status}`)
+                })
+                .catch(reject)
+        })
+    }
+
+    filterPermissions(perms, apps) {
+        return perms.filter((perm) => apps.some((app) => perm.startsWith(`kite+perm://${app}`)))
+    }
+
+    finishApplications() {
+        var { complete, errors } =
+            this.applicationProgress.values()
+            .reduce((({ complete, success, errors }, { finished, error }) => {
+                return { complete: complete && (finished || error),
+                         success: success && finished,
+                         errors: errors || error }
+            }), { complete: true, success: true, errors: false })
+
+        if ( complete ) {
+            if ( errors ) {
+                this.state = PortalServerState.ApplicationInstallError
+            } else {
+                this.state = PortalServerState.ApplicationsSuccess
+            }
+            this.updateModal()
+        }
+    }
+
+    doInstallApps(apps) {
+        console.log("Installing apps", apps)
+
+        this.request.permissions = this.filterPermissions(this.request.permissions, apps)
+
+        console.log("Granting permissions", this.request.permissions)
+
+        // Install the applications
+        this.applicationProgress = {}
+        apps.map((app) => {
+            this.applicationProgress[app] = { total: 0, complete: 0 }
+            this.startAppInstallation(app, (progress) => { this.applicationProgress[app] = progress; this.updateModal(); })
+                .then(() => { this.applicationProgress[app] = { finished: true };
+                              this.finishApplications();
+                              this.updateModal(); })
+                .catch((error) => { this.applicationProgress[app] = { error };
+                                    this.finishApplications();
+                                    this.updateModal(); })
+        })
+        this.state = PortalServerState.InstallingApplications
+        this.updateModal()
+    }
+
     updateModal() {
         if ( !this.modalShown )
             this.showModal()
@@ -646,9 +818,12 @@ export class PortalServer {
                                                   state: this.state,
                                                   logins: this.logins || [],
                                                   missingApps: this.missingApps,
+                                                  appProgress: this.applicationProgress,
+                                                  installApps: this.doInstallApps.bind(this),
                                                   permissions: this.request.permissions,
                                                   onResetLogins: this.onResetLogins.bind(this),
-                                                  onSuccess: this.onAccept.bind(this)
+                                                  onSuccess: this.onAccept.bind(this),
+                                                  onRetryAfterInstall: this.onAccept.bind(this)
                                                 }),
                             this.modalContainer)
             break;
