@@ -439,16 +439,17 @@ class PermissionsModal extends React.Component {
 
                      (this.props.state == PortalServerState.ApplicationInstallError ?
                       E('div', { className: 'kite-form-row', key: 'confirm-list' },
-                        E('button', { className: 'uk-button uk-button-danger' },
-                          E('i', { className: 'fa fa-fw fa-retry',
-                                   onClick: this.props.installApps }, 'Retry'))) : null ),
+                        E('button', { className: 'uk-button uk-button-danger',
+                                      onClick: this.props.installApps },
+                          E('i', { className: 'fa fa-fw fa-refresh' }),
+                          ' Retry')) : null ),
 
                      (this.props.state == PortalServerState.ApplicationsSuccess ?
                       E('div', { className: 'kite-form-row', key: 'confirm-list' },
-                        E('button', { className: 'uk-button uk-button-primary' },
-                          E('i', { className: 'fa fa-fw fa-check',
-                                   onClick: this.props.onRetryAfterInstall },
-                            'Continue'))) : null)
+                        E('button', { className: 'uk-button uk-button-primary',
+                                      onClick: this.props.onRetryAfterInstall },
+                          E('i', { className: 'fa fa-fw fa-check' }),
+                          'Continue')) : null)
                    ];
 
             break;
@@ -758,12 +759,14 @@ export class PortalServer {
 
     finishApplications() {
         var { complete, errors } =
-            this.applicationProgress.values()
+            Object.values(this.applicationProgress)
             .reduce((({ complete, success, errors }, { finished, error }) => {
                 return { complete: complete && (finished || error),
                          success: success && finished,
                          errors: errors || error }
             }), { complete: true, success: true, errors: false })
+
+        console.log("Check finishApplications", complete, errors)
 
         if ( complete ) {
             if ( errors ) {
