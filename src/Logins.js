@@ -38,8 +38,8 @@ export class Login {
         return new Promise((resolve, reject) => {
             var client = new FlockClient({ url: this.flockUrl,
                                            appliance: this.applianceName })
-            client.addEventListener('error', reject)
-            client.addEventListener('open', () => {
+            client.addEventListener('error', (e) => { console.error(e); reject(e); })
+            client.addEventListener('needs-personas', () => {
                 var persona = this.personaId
                 if ( persona === undefined )
                     persona = 'token'
