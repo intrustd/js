@@ -11,8 +11,6 @@ import { BufferParser } from "./Buffer.js";
 import { SocketType,
          RequestAppControlMessage, RequestAppControlResponse,
          ConnectAppControlRequest, ConnectAppControlResponse } from "./SocketProxy.js";
-import { getSite } from './Site.js';
-
 
 export class FlockConnectionNotOpenError extends Error {
     constructor () {

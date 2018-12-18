@@ -1,0 +1,19 @@
+.kite-persona-button {
+    width: 180px;
+    padding: 10px 20px;
+    border-radius: 1000px;
+    border: 1px solid #ccc;
+    box-shadow: 0 0 3px rgba(#555, 0.2);
+    margin: 5px;
+
+    display: flex;
+    flex-direction: row;
+
+    .kite-persona-name {
+        align-self: flex-end;
+        width: 150px;
+        text-align: right;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}

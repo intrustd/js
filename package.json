@@ -24,6 +24,7 @@
     "mithril": "^1.1.6",
     "nprogress": "^0.2.0",
     "popper.js": "^1.14.4",
+    "query-string": "^6.2.0",
     "react": "^16.5.2",
     "react-dom": "^16.5.2",
     "utf8": "^3.0.0",

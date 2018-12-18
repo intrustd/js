@@ -21,7 +21,7 @@ class KiteMissingApps {
     }
 }
 
-class KitePermissionsError {
+export class KitePermissionsError {
     constructor (msg) {
         this.message = msg
     }
@@ -102,8 +102,9 @@ class PortalModal extends React.Component {
             break;
         case PortalModalState.NeedsPopup:
             explanation = E('div', { className: 'popup-request' },
-                            'The login popup was blocked. Click below to open the window',
-                            E('button', { onClick: this.props.doPopup }, 'Login'))
+                            E('p', null, 'The login popup was blocked.'),
+                            E('p', null, 'Click below to open the window.'),
+                            E('button', { onClick: this.props.doPopup, className: 'uk-button uk-button-primary' }, 'Login'))
             break;
         case PortalModalState.Error:
             explanation = E('div', { className: 'popup-error-box' },
@@ -314,8 +315,6 @@ export class PortalAuthenticator extends EventTarget('open', 'error') {
             } else {
                 window.removeEventListener('message', this.windowMessageHandler)
                 if ( msg.data.success ) {
-                    console.log("Permissions granted!!", msg.data)
-
                     this.login = new Login({ persona_id: msg.data.persona,
                                              flock: msg.data.flockUrl,
                                              appliance: msg.data.applianceName,
@@ -592,9 +591,6 @@ export class PortalServer {
 
     requestDisplay(source) {
         this.respond('show-portal')
-    }
-
-    mintToken(request) {
     }
 
     showModal() {

@@ -4,11 +4,11 @@ import { HTTPParser } from 'http-parser-js';
 import { FlockClient } from "../FlockClient.js";
 import { Authenticator } from "../Authenticator.js";
 import { PortalAuthenticator } from "../Portal.js";
+import { PermalinkAuthenticator, isPermalink } from "../Permalink.js";
 import { parseKiteAppUrl, kiteAppCanonicalUrl } from "./Common.js";
 import { generateKiteBonudary, makeFormDataStream } from "./FormData.js";
 import { BlobReader } from "./Streams.js";
 import { CacheControl } from "./Cache.js";
-import { getSite, resetSite } from "../Site.js";
 import ProgressManager from "./Progress.js";
 
 var oldFetch = window.fetch;
@@ -66,7 +66,7 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
         this.body = []
 
         var addHeaders = (hdrs) => {
-            console.log("Adding headers", hdrs)
+//            console.log("Adding headers", hdrs)
             for ( var i = 0; i < hdrs.length; i += 2 ) {
                 this.response.headers.set(hdrs[i], hdrs[i + 1])
             }
@@ -110,24 +110,28 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
             this.responseParser[this.responseParser.kOnMessageComplete] =
             this.responseParser.onMessageComplete =
             () => {
-                console.log("Going to provide response", this.body, this.response)
+//                console.log("Going to provide response", this.body, this.response)
                 this.response.headers.set('access-control-allow-origin', '*')
-                for (var pair of this.response.headers.entries()) {
-                    console.log(pair[0]+ ': '+ pair[1]);
-                }
+//                for (var pair of this.response.headers.entries()) {
+//                    console.log(pair[0]+ ': '+ pair[1]);
+//                }
                 //                this.responsethis.response.headers.map((hdr) => { console.log("Got header", hdr) })
 
                 var responseBlob = this.currentBody
                 if ( frameRequested !== null )
                     window.cancelAnimationFrame(frameRequested)
                 this.sendPartialLoadEvent(totalBody)
-                this.dispatchEvent(new HTTPResponseEvent(new Response(responseBlob, this.response),
-                                                         responseBlob))
+                var response = new Response(responseBlob, this.response)
+                response.kite = { 'flock': this.socket.conn.flockUrl,
+                                  'appliance': this.socket.conn.appliance,
+                                  'persona': this.socket.conn.personaId };
+
+                this.dispatchEvent(new HTTPResponseEvent(response, responseBlob))
                 this.cleanupSocket()
             }
 
         this.socket.addEventListener('open', () => {
-            console.log("Going to send headers", this.request.headers)
+            //console.log("Going to send headers", this.request.headers)
             var headers = new Headers(this.request.headers)
             headers.append('Host', url.app)
             headers.append('Accept', '*/*')
@@ -138,7 +142,7 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
 
             var stsLine = this.request.method + ' ' + this.url.path + ' HTTP/1.1\r\n';
             var bodyLengthCalculated = Promise.resolve()
-            console.log("Sending ", stsLine)
+            //console.log("Sending ", stsLine)
 
             this.socket.send(stsLine)
             var doSendBody = () => {
@@ -147,15 +151,15 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
             var continueSend = () => {
                 for ( var header of headers ) {
                     var hdrLn = `${header[0]}: ${header[1]}\r\n`
-                    console.log("Header", hdrLn)
+                    //console.log("Header", hdrLn)
                     this.socket.send(hdrLn)
                 }
                 this.socket.send('\r\n')
-                console.log("Sending body")
+                //console.log("Sending body")
                 doSendBody()
             }
 
-            console.log("Fetching", this.request, this.request.hasOwnProperty('body'))
+            //console.log("Fetching", this.request, this.request.hasOwnProperty('body'))
             if ( this.request.hasOwnProperty('body') ) {
                 bodyLengthCalculated =
                     this.calculateBodyLength(this.request.body)
@@ -185,7 +189,7 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
         })
         this.socket.addEventListener('data', (e) => {
             var dataBuffer = Buffer.from(e.data)
-            console.log("Got response", dataBuffer)
+            //console.log("Got response", dataBuffer)
             this.responseParser.execute(dataBuffer)
         })
         this.socket.addEventListener('close', () => {
@@ -198,7 +202,7 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
 
     sendBody(bodyStream) {
         this.socket.sendStream(bodyStream, (sent) => {
-            console.log("Sending", sent)
+            //console.log("Sending", sent)
             this.sendProgressEvent(sent, this.bodyLength)
         })
     }
@@ -298,8 +302,17 @@ function chooseNewAppliance(flocks, site) {
     } else {
         // The best way to log in is to use the flock recommended
         // portal app. Ask the flock which application is best
+
+        var mkAuth
+
+        if ( isPermalink() ) {
+            mkAuth = () => { return new PermalinkAuthenticator() }
+        } else {
+            mkAuth = () => { return new PortalAuthenticator(flocks, site, oldFetch, kiteFetch.permissions) }
+        }
+
         return new Promise((resolve, reject) => {
-            var chooser = new PortalAuthenticator(flocks, site, oldFetch, kiteFetch.permissions)
+            var chooser = mkAuth()
 
             chooser.addEventListener('error', (e) => {
                 globalClient = undefined;
@@ -307,21 +320,16 @@ function chooseNewAppliance(flocks, site) {
             })
 
             chooser.addEventListener('open', (e) => {
+                console.log("Got device", e.device)
                 resolve(e.device)
             })
         })
     }
 }
 
-function getGlobalClient(flocks, site) {
+function getGlobalClient(flocks) {
     if ( globalClient === undefined ) {
-        if ( site !== undefined &&
-             site !== null ) {
-            globalClient = loginToSite(site)
-                .catch((e) => { resetSite(); return chooseNewAppliance(flocks, site) })
-        } else {
-            globalClient = chooseNewAppliance(flocks, site)
-        }
+        globalClient = chooseNewAppliance(flocks)
     }
     return globalClient;
 }
@@ -369,7 +377,7 @@ export default function kiteFetch (req, init) {
             if ( init.hasOwnProperty('kiteClient') )
                 clientPromise = Promise.resolve(init['kiteClient'])
             else
-                clientPromise = getGlobalClient(flockUrls, getSite())
+                clientPromise = getGlobalClient(flockUrls)
 
             console.log("Request is ", req, init)
 

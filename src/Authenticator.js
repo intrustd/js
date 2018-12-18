@@ -6,7 +6,58 @@ import ReactDom from 'react-dom';
 import { FlockClient } from './FlockClient.js';
 
 import "./Authenticator.scss";
+import { KitePermissionsError } from "./Portal.js";
 import { getAppliances, touchAppliance } from "./Logins.js";
+
+export function makeAbsoluteUrl(url) {
+    var a = document.createElement('a')
+    a.href = url
+    return `${a.href}`;
+}
+
+export function mintToken(perms, options) {
+    var defaults = { format: 'raw', ttl: null, siteOnly: false }
+
+    if ( options === undefined )
+        options = {};
+
+    options = Object.assign(defaults, options);
+
+    var site
+
+    if ( options.siteOnly ) {
+        // Get site TODO
+    }
+
+    var request = { 'permissions': perms }
+    if ( options.ttl !== undefined && options.ttl !== null )
+        request.ttl = options.ttl
+    if ( site !== undefined )
+        request.site = site
+
+    return fetch('kite+app://admin.flywithkite.com/tokens',
+                 { method: 'POST',
+                   headers: { 'Content-type': 'application/json' },
+                   body: JSON.stringify(request) })
+        .then((r) => {
+            switch ( r.status ) {
+            case 200:
+                if ( options.format == 'query' ) {
+                    return r.json().then(({token}) => {
+                        return `?flock=${encodeURIComponent(r.kite.flock)}&appliance=${encodeURIComponent(r.kite.appliance)}&token=${token}&persona=${encodeURIComponent(r.kite.persona)}`
+                    })
+                } else
+                    return r.json()
+            case 400:
+                console.error("Bad requset (perhaps non-existent app?)"); // TODO
+                return Promise.reject(new KitePermissionsError("Unknown"))
+            case 401:
+                return Promise.reject(new KitePermissionsError("Not authorized to create this token"));
+            default:
+                return Promise.reject(new KitePermissionsError("Unknown"));
+            }
+        })
+}
 
 function loginToAppliance(flocks, appliance) {
     var attempts = flocks.map((flock, flockIndex) => () => {

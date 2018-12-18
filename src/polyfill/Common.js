@@ -10,7 +10,7 @@ export function parseKiteAppUrl(url) {
                 return { isKite: true,
                          app: info[0],
                          path: '/' + info.slice(1).join('/'),
-                         port: 50051 // TODO
+                         port: 80 // TODO
                        };
             }
         }

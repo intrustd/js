@@ -1,4 +1,4 @@
 import { FlockClient, installKite } from './src/Flock.js';
+import { mintToken, makeAbsoluteUrl } from './src/Authenticator.js';
 
-console.log("Install kite is (index.js)", installKite)
-export { installKite }
+export { installKite, mintToken, makeAbsoluteUrl }

@@ -2,6 +2,8 @@ import React from 'react';
 
 import { parseKiteAppUrl } from './polyfill/Common.js';
 
+import './react.scss';
+
 function getXhrImage(xhr, opts) {
     xhr.response
 }
@@ -19,7 +21,6 @@ export class KiteUploadButton extends React.Component {
     }
 
     doUpload() {
-        console.log("Goiing to uplaod", this.upload.current.files)
         if ( !this.props.hasOwnProperty('onUpload') )
             console.error("<KiteUploadButton> expects 'onUpload={...}' property")
         else
@@ -101,7 +102,6 @@ export class KiteImage extends React.Component {
                         blob: b}
             }))
             .then(({contentType, blob}) => {
-                console.log("content", contentType, blob)
                 var curBlob = URL.createObjectURL(blob);
                 this.setState({srcUrl: curBlob,
                                isBlob: true})
@@ -189,10 +189,16 @@ export class KitePersonaButton extends React.Component {
                     personaInfo = persona_id
 
                 return E('li', {className: 'kite-persona-button'},
-                         personaInfo,
+                         E('div', { className: 'kite-persona-name' }, personaInfo),
                          E('div', {className: 'uk-navbar-dropdown'},
                            E('ul', {className: 'uk-nav uk-navbar-dropdown-nav'},
-                             E('li', {}, 'Settings...'))));
+                             E('li', null,
+                               E('dl', {className: 'kite-persona-info'},
+                                 E('dt', {className: 'kite-persona-info-item--appliance'}, 'Appliance'),
+                                 E('dd', null, 'Test'),
+                                 E('dt', {className: 'kite-persona-info-item--days-left'}, 'Time left'),
+                                 E('dd', null, 'Test')),
+                               E('li', null, 'Log out')))));
             }
         } else {
             return E('li', {className: 'kite-persona-button kite-persona-button--loading'},
