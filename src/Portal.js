@@ -80,6 +80,7 @@ const PortalModalState = {
     RequestingPermissions: Symbol('RequestingPermissions'),
     NeedsPopup: Symbol('NeedsPopup'),
     Connecting: Symbol('Connecting'),
+    ChooseLogin: Symbol('ChooseLogin'),
     Error: Symbol('Error')
 }
 
@@ -133,14 +134,24 @@ class PortalModal extends React.Component {
         case PortalModalState.RequestingPermissions:
             explanation = 'Requesting permissions...'; // TODO pop-up blockers
             break;
+        case PortalModalState.ChooseLogin:
+            explanation = E('div', { className: 'kite-form-row', key: 'choose-login'  },
+                            E('ul', { className: 'kite-list kite-login-list' },
+                              this.props.logins.map((login) => {
+                                  return E('li', { key: login.key,
+                                                   onClick: () => { this.props.selectLogin(login) }},
+                                           E('span', { className: 'kite-appliance-name' }, login.applianceName),
+                                           E('span', { className: 'kite-login-expiration' }, `${login.expiration}`))
+                              })))
+            break;
         case PortalModalState.NeedsPopup:
-            explanation = E('div', { className: 'popup-request' },
+            explanation = E('div', { className: 'popup-request', key: 'popup-request' },
                             E('p', null, 'The login popup was blocked.'),
                             E('p', null, 'Click below to open the window.'),
                             E('button', { onClick: this.props.doPopup, className: 'uk-button uk-button-primary' }, 'Login'))
             break;
         case PortalModalState.Error:
-            explanation = E('div', { className: 'popup-error-box' },
+            explanation = E('div', { className: 'popup-error-box', key: 'popup-error-box' },
                             E('p', null, 'There was an error logging in:'),
                             E('p', null, this.props.error),
                             E('button', { onClick: this.props.requestNewLogin },
@@ -242,6 +253,8 @@ export class PortalAuthenticator extends EventTarget('open', 'error') {
 
         document.body.appendChild(this.modalContainer)
 
+        this.logins = null
+
         this.state = PortalModalState.LookingUpPortal
         this.permissions = permissions
         this.render()
@@ -252,22 +265,17 @@ export class PortalAuthenticator extends EventTarget('open', 'error') {
             .then(([{flock, portalUrl}, site, logins]) => {
                 var url = new URL(portalUrl)
 
-                this.state = PortalModalState.RequestingPermissions
-
                 this.chosenFlock = flock
                 this.site = site
                 this.portalUrl = portalUrl
                 this.portalOrigin = url.origin
 
-                console.log("Got logins", logins)
+                this.logins = logins
                 if ( logins.length == 1 ) {
-                    // Login as this one token
-                    this.state = PortalModalState.Connecting
-                    this.login = logins[0]
-                    this.doConnect()
-                    this.render()
+                    this.selectLogin(logins[0])
                 } else if ( logins.length > 0 ) {
-                    // TODO show box
+                    this.state = PortalModalState.ChooseLogin
+                    this.render()
                 } else {
                     return openPortalFrame(portalUrl)
                         .then((iframe) => {
@@ -311,11 +319,21 @@ export class PortalAuthenticator extends EventTarget('open', 'error') {
         setTimeout(() => { this.startPortalAuth() }, 500)
     }
 
+    selectLogin(login) {
+        // Login as this one token
+        this.state = PortalModalState.Connecting
+        this.login = login
+        this.doConnect()
+        this.render()
+    }
+
     render() {
         ReactDom.render(React.createElement(PortalModal,
                                             { state: this.state,
+                                              logins: this.logins,
                                               error: this.error,
                                               doPopup: this.doPopup,
+                                              selectLogin: this.selectLogin.bind(this),
                                               requestNewLogin: this.requestNewLogin.bind(this) }),
                         this.modalContainer)
     }
