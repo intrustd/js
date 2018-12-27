@@ -83,6 +83,39 @@ const PortalModalState = {
     Error: Symbol('Error')
 }
 
+class ConnectingAnimation extends React.Component {
+    render() {
+        return E('div', { className: 'kite-connecting' },
+                 E('i', { className: 'kite-connecting-dot' }),
+                 E('i', { className: 'kite-connecting-dot' }),
+                 E('i', { className: 'kite-connecting-dot' }))
+    }
+}
+
+class DelayedGroup extends React.Component {
+    constructor() {
+        super()
+
+        this.state = { timer: null, timedOut: false }
+    }
+
+    componentDidMount() {
+        var timer = setTimeout(this.onTimeout.bind(this), this.props.delay)
+        this.setState({ timer })
+    }
+
+    onTimeout() {
+        this.setState({ timedOut: true })
+    }
+
+    render() {
+        if ( this.state.timedOut )
+            return this.props.children
+        else
+            return null
+    }
+}
+
 class PortalModal extends React.Component {
     constructor() {
         super()
@@ -91,7 +124,7 @@ class PortalModal extends React.Component {
     }
 
     render() {
-        var explanation = 'Authenticating...'
+        var explanation
 
         switch ( this.props.state ) {
         case PortalModalState.LookingUpPortal:
@@ -113,10 +146,17 @@ class PortalModal extends React.Component {
                             E('button', { onClick: this.props.requestNewLogin },
                               'Try again'));
             break;
+        case PortalModalState.Connecting:
+            explanation = [ E(ConnectingAnimation),
+                            E(DelayedGroup, { delay: 5000 },
+                              E('p', null, 'This seems to be taking a bit, click ',
+                                E('a', { href: '#', onClick: this.props.requestNewLogin }, 'here'),
+                                ' to reconnect')) ];
+            break;
         }
 
         return E('div', { className: 'kite-auth-modal' },
-                 E('header', { className: 'kite-auth-modar-header' },
+                 E('header', { className: 'kite-auth-modal-header' },
                    E('h3', {}, 'Authenticating with Kite')),
                  E('p', { className: 'kite-auth-explainer' },
                    explanation))
@@ -391,17 +431,31 @@ class PermissionsModal extends React.Component {
         var body
         var loading = false
 
-        console.log("Render for ", this.props.state)
-
         switch ( this.props.state ) {
+        case PortalServerState.WaitingToStart:
+            body = [ E('p', {className: 'kite-auth-explainer'},
+                       'Logging in to appliance...'),
+
+                     E('button', { className: 'uk-button uk-button-primary' },
+                       'Settings...') ]
+            break;
         case PortalServerState.Error:
             body = [ E('p', {className: 'kite-auth-explainer'},
-                       'Error: ', this.error),
+                       'Error: ', `${this.props.error}`),
 
                      E('button', { type: 'button',
                                    className: 'uk-button uk-button-primary',
                                    onClick: this.props.onResetLogins },
                        'Try again') ]
+            break;
+        case PortalServerState.Connecting:
+            body = [ E(ConnectingAnimation),
+                     E(DelayedGroup, { delay: 5000 },
+                       E('p', null,
+                         'This seems to be taking a while. Click ',
+                         E('a', { href: '#', onClick: this.props.cancelConnection }, 'here'),
+                         ' to try a new set of credentials'))
+                   ]
             break;
         case PortalServerState.DisplayLogins:
             body = E('p', {className: 'kite-auth-explainer'},
@@ -485,6 +539,9 @@ class PermissionsModal extends React.Component {
                    ]
 
             break;
+        default:
+            console.log("Found default case", this.props.state)
+            break;
         }
 
         return E('div', {className: 'kite-auth-modal'},
@@ -504,6 +561,7 @@ export const PortalServerState = {
     NewLogin: Symbol('NewLogin'),
     LoginOne: Symbol('LoginOne'),
     DisplayLogins: Symbol('DisplayLogins'),
+    Connecting: Symbol('Connecting'),
     MintingToken: Symbol('MintingToken'),
     Error: Symbol('Error'),
     InstallAppsRequest: Symbol('InstallAppsRequest'),
@@ -535,8 +593,6 @@ export class PortalServer {
 
                 lookupLogins()
                     .then((logins) => {
-                        console.log("Got logins", logins)
-
                         this.logins = logins
 
                         if ( logins.length == 0 ) {
@@ -550,7 +606,7 @@ export class PortalServer {
                             } else {
                                 // Valid login... ask for confirmation
                                 // Attempt to login to server
-                                console.log("Going to ask for client")
+                                this.state = PortalServerState.Connecting;
 
                                 login.createClient()
                                     .then((client) => {
@@ -582,7 +638,6 @@ export class PortalServer {
     }
 
     showDisplay() {
-        console.log("Requesting to show display")
         if ( this.display == PortalDisplay.Hidden )
             this.requestDisplay()
         else
@@ -667,7 +722,10 @@ export class PortalServer {
 
     onResetLogins() {
         resetLogins()
-            .then(() => this.showDisplay())
+            .then(() => {
+                this.state = PortalServerState.NewLogin
+                this.showDisplay()
+            })
     }
 
     onAccept() {
@@ -797,6 +855,11 @@ export class PortalServer {
         this.updateModal()
     }
 
+    cancelConnection() {
+        this.state = PortalServerState.NewLogin;
+        this.updateModal();
+    }
+
     updateModal() {
         if ( !this.modalShown )
             this.showModal()
@@ -815,6 +878,7 @@ export class PortalServer {
             ReactDom.render(React.createElement(PermissionsModal,
                                                 { key: 'permissions',
                                                   state: this.state,
+                                                  error: this.error,
                                                   logins: this.logins || [],
                                                   missingApps: this.missingApps,
                                                   appProgress: this.applicationProgress,
@@ -822,7 +886,8 @@ export class PortalServer {
                                                   permissions: this.request.permissions,
                                                   onResetLogins: this.onResetLogins.bind(this),
                                                   onSuccess: this.onAccept.bind(this),
-                                                  onRetryAfterInstall: this.onAccept.bind(this)
+                                                  onRetryAfterInstall: this.onAccept.bind(this),
+                                                  cancelConnection: this.cancelConnection.bind(this)
                                                 }),
                             this.modalContainer)
             break;
