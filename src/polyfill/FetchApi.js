@@ -2,13 +2,14 @@
 import { EventTarget } from 'event-target-shim';
 import { HTTPParser } from 'http-parser-js';
 import { FlockClient } from "../FlockClient.js";
-import { Authenticator } from "../Authenticator.js";
+import { Authenticator, attemptLogin } from "../Authenticator.js";
 import { PortalAuthenticator } from "../Portal.js";
 import { PermalinkAuthenticator, isPermalink } from "../Permalink.js";
 import { parseKiteAppUrl, kiteAppCanonicalUrl } from "./Common.js";
 import { generateKiteBonudary, makeFormDataStream } from "./FormData.js";
 import { BlobReader } from "./Streams.js";
 import { CacheControl } from "./Cache.js";
+import { doUpdate } from "./Updates.js";
 import ProgressManager from "./Progress.js";
 
 var oldFetch = window.fetch;
@@ -19,6 +20,110 @@ var globalAppliance;
 if ( !window.ReadableStream ) {
     var streamsPolyfill = require('web-streams-polyfill')
     window.ReadableStream = streamsPolyfill.ReadableStream;
+}
+
+function makeAbsoluteUrl(url, base) {
+    return (new URL(url, base)).toString()
+}
+
+function getLocation(rsp, req) {
+    if ( rsp.headers.get('location') !== null ) {
+        var locs = rsp.headers.get('location').split(',')
+        if ( locs.length == 1) {
+            return makeAbsoluteUrl(locs[0], req.url)
+        } else return null
+    } else
+        return null;
+}
+
+function updateReq(req, update) {
+    var url = req.url
+    var init = { method: req.method,
+                 headers: req.headers,
+                 body: req.body,
+                 mode: req.mode,
+                 credentials: req.credentials,
+                 cache: req.cache,
+                 redirect: req.redirect,
+                 referrer: req.referrer,
+                 integrity: req.integrity
+               }
+
+    if ( update.url !== undefined ) {
+        url = update.url
+        delete update.url
+    }
+
+    Object.assign(init, update)
+
+    return new Request(url, init)
+}
+
+function validRedirect(from, to) {
+    var fromUrl = new URL(from)
+    var toUrl = new URL(to)
+
+    if ( fromUrl.scheme == toUrl.scheme ) return true
+
+    if ( fromUrl.scheme == 'http' && toUrl.scheme == 'https') return true
+
+    if ( fromUrl.scheme == 'kite+app' ) return true
+
+    return false
+}
+
+function redirectedRequest(resp, req) {
+    var loc = getLocation(resp, req)
+
+    console.log("Location", loc, resp.status)
+
+    if ( (resp.status >= 301 && resp.status <= 303) ||
+         (resp.status >= 307 && resp.status <= 308) ) {
+        console.log("Redir", validRedirect(req.url, loc))
+        switch (resp.status) {
+        case 301:
+            // TODO cache this
+        case 302:
+        case 303:
+            if ( loc === null )
+                return Response.error()
+
+            if ( !validRedirect(req.url, loc) )
+                return Response.error()
+
+            return updateReq(req, { url: loc,
+                                    referrer: req.url,
+                                    method: 'GET' })
+
+        case 308:
+            // TODO cache this
+        case 307:
+            if ( loc === null )
+                return Response.error()
+
+            if ( !validRedirect(req.url, loc) )
+                return Response.error()
+
+            return updateReq(req, { url: loc,
+                                    referrer: req.url })
+        }
+    } else
+        return null
+}
+
+class KiteOpaqueRedirectResponse extends Response {
+    constructor(actualResponse) {
+        super("", { status: 0 })
+        this.responnse
+    }
+
+    get redirected() {
+        return true
+    }
+
+    get type() {
+        return "opaqueredirect"
+    }
 }
 
 class HTTPResponseEvent {
@@ -42,6 +147,12 @@ class HTTPRequesterError {
     constructor (sts) {
         this.type = 'error'
         this.explanation = sts
+    }
+}
+
+class AppUpdateError {
+    constructor (sts) {
+        this.statusCode = sts
     }
 }
 
@@ -110,12 +221,7 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
             this.responseParser[this.responseParser.kOnMessageComplete] =
             this.responseParser.onMessageComplete =
             () => {
-//                console.log("Going to provide response", this.body, this.response)
                 this.response.headers.set('access-control-allow-origin', '*')
-//                for (var pair of this.response.headers.entries()) {
-//                    console.log(pair[0]+ ': '+ pair[1]);
-//                }
-                //                this.responsethis.response.headers.map((hdr) => { console.log("Got header", hdr) })
 
                 var responseBlob = this.currentBody
                 if ( frameRequested !== null )
@@ -209,7 +315,6 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
 
     get currentBody() {
         var blobProps = { type: this.response.headers.get('content-type') }
-        console.log("Got blob props", blobProps)
         return new Blob(this.body, blobProps)
     }
 
@@ -223,7 +328,6 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
     }
 
     cleanupSocket() {
-        console.log("Cleanup socket")
         this.socket.close()
         delete this.socket
     }
@@ -262,10 +366,8 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
             var doCalc = () => {
                 lengthReader.read().then(({done, value}) => {
                     if ( done ) {
-                        console.log('totalLength', totalLength)
                         resolve({ length: totalLength, bodyStream: bodySource })
                     } else {
-                        console.log('totalLength adding', totalLength, value.byteLength, value)
                         if ( value instanceof ArrayBuffer )
                             totalLength += value.byteLength
                         else if ( typeof value == 'string' )
@@ -320,7 +422,6 @@ function chooseNewAppliance(flocks, site) {
             })
 
             chooser.addEventListener('open', (e) => {
-                console.log("Got device", e.device)
                 resolve(e.device)
             })
         })
@@ -332,6 +433,48 @@ function getGlobalClient(flocks) {
         globalClient = chooseNewAppliance(flocks)
     }
     return globalClient;
+}
+
+function isVersionOlder(a, b) {
+    var va = a.split('.')
+    var vb = b.split('.')
+
+    if ( va.length != vb.length ) return false
+
+    for ( var i = 0; i < va.length; ++i ) {
+        if ( va[i] < vb[i] ) return true
+        else if ( va[i] > vb[i] ) return false
+    }
+
+    return false
+}
+
+function updateApp(client, canonAppUrl) {
+    if ( kiteFetch.updatedApps[canonAppUrl] === undefined ) {
+        if ( kiteFetch.requiredVersions[canonAppUrl] === undefined )
+            kiteFetch.updatedApps[canonAppUrl] = Promise.resolve()
+        else {
+            kiteFetch.updatedApps[canonAppUrl] = kiteFetch(`kite+app://admin.flywithkite.com/me/applications/${canonAppUrl}/manifest/current`)
+                .then((r) => {
+                    if ( r.status == 200 ) {
+                    return r.json()
+                            .then(({version}) => {
+                                if ( isVersionOlder(version, kiteFetch.requiredVersions[canonAppUrl]) ) {
+                                    // Do Update
+                                    return doUpdate(kiteFetch, client, canonAppUrl)
+                                } else
+                                    return
+                            })
+                    } else {
+                        console.log("Got", r.status, "while requesting version of", canonAppUrl)
+                        // TODO raise notification
+                        return
+                    }
+                })
+        }
+    }
+
+    return kiteFetch.updatedApps[canonAppUrl]
 }
 
 export default function kiteFetch (req, init) {
@@ -347,7 +490,10 @@ export default function kiteFetch (req, init) {
         else {
             var flockUrls = kiteFetch.flockUrls;
             var canonAppUrl = kiteUrl.app;
-            var clientPromise
+            var clientPromise, clonedReq
+
+            if ( init === undefined )
+                init = {};
 
             if ( req instanceof Request )
                 req = new Request(req)
@@ -358,10 +504,10 @@ export default function kiteFetch (req, init) {
                     req.body = init.body
             }
 
+            var clonedReq = req.clone()
+
             if ( kiteFetch.rewrite.hasOwnProperty(canonAppUrl) ) {
                 var newUrl = kiteFetch.rewrite[canonAppUrl].replace(/\[path\]/g, kiteUrl.path)
-
-                console.log("Rewrite to ", newUrl)
 
                 req = new Request(newUrl, { method: req.method,
                                             body: req.body,
@@ -379,12 +525,17 @@ export default function kiteFetch (req, init) {
             else
                 clientPromise = getGlobalClient(flockUrls)
 
-            console.log("Request is ", req, init)
+            if ( kiteFetch.autoUpdate ) {
+                clientPromise =
+                    clientPromise.then((client) => {
+                        return updateApp(client, canonAppUrl).then(() => client)
+                    })
+            }
 
             var runRequest = (dev) => {
                 var tracker = ProgressManager.startFetch()
 
-                return dev.requestApps([ canonAppUrl ])
+                return dev.requestApps([ canonAppUrl ], { update: kiteFetch.update })
                     .then(() => dev)
                     .then((dev) => new Promise((resolve, reject) => {
                         var socket = dev.socketTCP(canonAppUrl, kiteUrl.port);
@@ -410,6 +561,57 @@ export default function kiteFetch (req, init) {
                         })
 
                         httpRequestor.addEventListener('response', (resp) => {
+                            var redirect = redirectedRequest(resp.response, clonedReq)
+                            console.log("Redirected request", redirect)
+
+                            if ( redirect !== null ) {
+                                if ( redirect.type == 'error' ) {
+                                    resolve(redirect)
+                                    return
+                                }
+
+                                switch ( req.redirect ) {
+                                case 'follow':
+                                    resolve(kiteFetch(redirect));
+                                    return;
+
+                                case 'manual':
+                                    resolve(new KiteOpaqueRedirectResponse(resp.response))
+                                    return
+
+                                case 'error':
+                                    resolve(new KiteErrorResponse())
+                                    return
+
+                                default:
+                                    break;
+                                }
+                            }
+
+                            if ( resp.response.status == 401 ) {
+                                // Check WWW-Authenticate header
+                                var schemes = resp.response.headers.get("WWW-Authenticate")
+
+                                if ( schemes === null )
+                                    schemes = []
+                                else
+                                    schemes = schemes.split(",")
+
+                                if ( kiteFetch.autoLogin && schemes.includes("X-Kite-Login") &&
+                                     !kiteFetch.loggedIn && req.method == 'GET' ) {
+                                    attemptLogin()
+                                        .then((success) => {
+                                            if ( success ) {
+                                                kiteFetch.loggedIn = true
+                                                resolve(kiteFetch(req))
+                                            } else {
+                                                resolve(resp)
+                                            }
+                                        }, reject)
+                                    return
+                                }
+                            }
+
                             if ( req.cache != 'no-store' ) {
                                 var cache = new Promise((resolve, reject) => {
                                     if ( dev._kiteCache === undefined ) {
@@ -423,7 +625,7 @@ export default function kiteFetch (req, init) {
                                 })
 
                                 cache.then((cache) => {
-                                    console.log("Got response", resp.response);
+                                    // console.log("Got response", resp.response);
                                     var responseInit = { status: resp.response.status,
                                                          statusText: resp.response.statusText,
                                                          headers: resp.response.headers };
@@ -479,3 +681,7 @@ kiteFetch.flockUrls = [
       path: "/flock/",
       secure: true }
 ]
+
+kiteFetch.updatedApps = { }
+kiteFetch.requiredVersions = { }
+kiteFetch.loggedIn = false

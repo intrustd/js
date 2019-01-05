@@ -2,8 +2,6 @@ import kiteFetch from './FetchApi.js'
 import kiteXMLHttpRequest from './XhrApi.js'
 
 export default function installKite(options) {
-    console.log("Installing Kite polyfills")
-
     if ( options === undefined )
         options = {}
 
@@ -23,7 +21,41 @@ export default function installKite(options) {
     else
         kiteFetch.rewrite = {}
 
-    // TODO Add basic permissions
+    if ( options.appName !== undefined )
+        kiteFetch.appName = options.appName
+    else
+        kiteFetch.appName = location.host
+
+    if ( options.requiredVersion !== undefined )
+        kiteFetch.requiredVersions[kiteFetch.appName] = options.requiredVersion
+
+    if ( typeof options.requiredVersions == 'object' )
+        kiteFetch.requiredVersions = options.requiredVersions
+
+    if ( options.autoUpdate === undefined &&
+         ( options.requiredVersion !== undefined ||
+           typeof options.requiredVersions == 'object' ) )
+        options.autoUpdate = true
+
+    if ( options.autoUpdate !== undefined )
+        kiteFetch.autoUpdate = options.autoUpdate
+    else
+        kiteFetch.autoUpdate = false
+
+    if ( options.httpAuthentication !== undefined )
+        kiteFetch.httpAuthentication = options.httpAuthentication
+    else
+        kiteFetch.httpAuthentication = true
+
+    if ( options.autoLogin !== undefined )
+        kiteFetch.autoLogin = options.autoLogin
+    else
+        kiteFetch.autoLogin = true
+
+    if ( options.loginHook !== undefined )
+        kiteFetch.loginHook = options.loginHook
+    else
+        kiteFetch.loginHook = function () { }
 
     window.XMLHttpRequest = kiteXMLHttpRequest
     window.fetch = kiteFetch

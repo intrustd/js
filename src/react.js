@@ -10,6 +10,15 @@ function getXhrImage(xhr, opts) {
 
 const E = React.createElement;
 
+export class KiteLoadingIndicator extends React.Component {
+    render() {
+        return E('span', { className: 'kite-connecting' },
+                 E('i', { className: 'kite-connecting-dot' }),
+                 E('i', { className: 'kite-connecting-dot' }),
+                 E('i', { className: 'kite-connecting-dot' }))
+    }
+}
+
 export class KiteUploadButton extends React.Component {
     constructor() {
         super()
@@ -197,8 +206,8 @@ export class KitePersonaButton extends React.Component {
                                  E('dt', {className: 'kite-persona-info-item--appliance'}, 'Appliance'),
                                  E('dd', null, 'Test'),
                                  E('dt', {className: 'kite-persona-info-item--days-left'}, 'Time left'),
-                                 E('dd', null, 'Test')),
-                               E('li', null, 'Log out')))));
+                                 E('dd', null, 'Test'))),
+                             E('li', null, 'Log out'))));
             }
         } else {
             return E('li', {className: 'kite-persona-button kite-persona-button--loading'},

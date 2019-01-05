@@ -9,7 +9,7 @@ export function parseKiteAppUrl(url) {
             if ( info.length >= 2 ) {
                 return { isKite: true,
                          app: info[0],
-                         path: '/' + info.slice(1).join('/'),
+                         path: '/' + info.slice(1).join('/') + url_obj.search,
                          port: 80 // TODO
                        };
             }

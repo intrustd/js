@@ -31,7 +31,7 @@ export function makeFormDataStream(formData, boundary) {
 
 
     var enqueueNext = (controller) => {
-        console.log("enqueueNext")
+        //console.log("enqueueNext")
         if ( mode.mode == FormDataMode.DONE ) {
             controller.close()
             return
@@ -81,7 +81,7 @@ export function makeFormDataStream(formData, boundary) {
                         enqueueNext(controller)
                     } else {
                         if ( mode.mode == FormDataMode.WAITING ) {
-                            console.log("Enqueue", chunk)
+                            //console.log("Enqueue", chunk)
                             controller.enqueue(chunk)
                             mode = mode.oldMode;
                             enqueueNext(controller)

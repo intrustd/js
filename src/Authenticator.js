@@ -5,6 +5,7 @@ import ReactDom from 'react-dom';
 
 import { FlockClient } from './FlockClient.js';
 
+import "./Common.scss";
 import "./Authenticator.scss";
 import { KitePermissionsError } from "./Portal.js";
 import { getAppliances, touchAppliance } from "./Logins.js";
@@ -49,7 +50,6 @@ export function mintToken(perms, options) {
                 } else
                     return r.json()
             case 400:
-                console.error("Bad requset (perhaps non-existent app?)"); // TODO
                 return Promise.reject(new KitePermissionsError("Unknown"))
             case 401:
                 return Promise.reject(new KitePermissionsError("Not authorized to create this token"));
@@ -172,9 +172,9 @@ export class AuthenticatorModal extends React.Component {
 
         var origin = this.props.origin || location.origin;
 
-        return E('div', {className: 'kite-auth-modal'},
-                 E('header', {className: 'kite-auth-modal-header'},
-                   E('h3', {}, 'Authenticate with Kite')),
+        return E('div', {className: 'kite-auth-modal kite-modal'},
+                 E('header', {className: 'kite-modal-header'},
+                   E('h3', null, 'Authenticate with Kite')),
                  E('p', {className: 'kite-auth-explainer'},
                    `The page at ${origin} is requesting to log in to your Kite device.`),
                  E('div', {className: 'kite-login-form'},
@@ -243,7 +243,7 @@ export class Authenticator extends EventTarget('open', 'error') {
         super();
 
         this.modalContainer = document.createElement("div");
-        this.modalContainer.classList.add("kite-auth-modal-backdrop");
+        this.modalContainer.classList.add("kite-modal-backdrop");
 
         document.body.appendChild(this.modalContainer)
 
@@ -268,4 +268,100 @@ export class Authenticator extends EventTarget('open', 'error') {
         this.hide()
         this.dispatchEvent(new AuthenticationEvent(dev))
     }
+}
+
+class LoginBox extends React.Component {
+    constructor() {
+        super()
+
+        this.passwordBoxRef = React.createRef()
+        this.state = { loading: false }
+    }
+
+    componentWillUnmount() {
+        if ( this.props.onComplete )
+            this.props.onComplete()
+    }
+
+    onKeyDown({keyCode}) {
+        if ( keyCode == 13 )
+            this.submit()
+    }
+
+    cancel() {
+        this.props.onCancel()
+    }
+
+    submit() {
+        var pw = this.passwordBoxRef.current.value
+
+        if ( !this.state.loading ) {
+            this.setState({loading: true})
+            fetch('kite+app://admin.flywithkite.com/login',
+                  { method: 'POST',
+                    body: pw })
+                .then((r) => {
+                    if ( r.status == 200 ) {
+                        this.props.onSuccess()
+                        this.setState({loading: false})
+                    } else {
+                        this.setState({loading: false,
+                                       error: true})
+                        this.passwordBoxRef.current.value = ""
+                    }
+                })
+        }
+    }
+
+    render() {
+        const E = React.createElement
+        var { loading } = this.state
+
+        var error
+
+        if ( this.state.error ) {
+            error = E('div', { className: 'kite-form-error' },
+                      'Invalid credentials')
+        }
+
+        return E('div', { className: 'kite-login-modal kite-modal' },
+                 E('header', { className: 'kite-modal-header' },
+                   E('h3', null, 'Authorization')),
+                 E('p', { className: 'kite-login-explainer' },
+                   'Please enter your password to complete this action'),
+                 error,
+                 E('div', { className: 'kite-login-form' },
+                   E('div', { className: 'kite-form-row' },
+                     E('div', { className: 'form-control' },
+                       E('input', { className: 'form-input', name: 'kite-password',
+                                    placeholder: 'Password', type: 'password',
+                                    ref: this.passwordBoxRef,
+                                    onKeyDown: this.onKeyDown.bind(this) }))),
+                   E('div', { className: 'kite-form-row' },
+                     E('button', { className: `kite-form-cancel ${loading ? 'kite-form-cancel--loading' : '' }`,
+                                   disabled: loading,
+                                   onClick: this.cancel.bind(this) },
+                       'Cancel'),
+                     E('button', { className: `kite-form-submit ${loading ? 'kite-form-submit--loading' : '' }`,
+                                   disabled: loading,
+                                   onClick: this.submit.bind(this) },
+                       'Login'))))
+    }
+}
+
+export function attemptLogin() {
+    var modalContainer = document.createElement("div");
+    modalContainer.classList.add("kite-modal-backdrop")
+
+    document.body.appendChild(modalContainer)
+
+    var onComplete = () => { document.body.removeChild(modalContainer) }
+
+    return new Promise((resolve, reject) => {
+        ReactDom.render(React.createElement(LoginBox, {
+            onComplete,
+            onSuccess: () => { resolve(true); onComplete() },
+            onCancel: () => { resolve(false); onComplete() }
+        }), modalContainer)
+    })
 }

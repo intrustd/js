@@ -166,7 +166,6 @@ export function touchAppliance(appliance_name) {
                    last_auth_time: new Date() }
     return getLoginsDb()
         .then((db) => db.appliance.put(appObj))
-        .then(() => { console.log("Touched appliance ", appliance_name) })
 }
 
 export function getAppliances() {

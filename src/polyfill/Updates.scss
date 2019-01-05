@@ -1,0 +1,72 @@
+$app-icon-size: 64px;
+
+@keyframes popup-bottom-left {
+    0% { transform: translateY(100%); }
+    100% { transform: none; }
+}
+
+.kite-update-notification-box {
+    animation: popup-bottom-left;
+    animation-duration: 1s;
+
+    position: absolute;
+    z-index: 10000;
+    bottom: 10px;
+    left: 10px;
+}
+
+.kite-app-icon {
+    width: $app-icon-size;
+    height: $app-icon-size;
+
+    float: left;
+}
+
+.kite-app {
+    min-width: 200px;
+
+    &:before {
+        float: right;
+        display: inline-block;
+        margin: 0 0 0 10px;
+        content: '\f058';
+        opacity: 0;
+        width: 24px;
+        height: 24px;
+        font-family: 'FontAwesome';
+        color: #207ce5;
+
+        transition: opacity 0.4s;
+    }
+
+    &.kite-app--loading {
+        .kite-app-indicator {
+            float: left;
+        }
+
+        .kite-app-error-indicator {
+            float: right;
+            color: red;
+        }
+    }
+
+    &.kite-app--selected:before {
+        visibility: visible;
+    }
+
+    &.kite-app--installed:before {
+        opacity: 1;
+    }
+
+    .kite-app-name {
+        margin-left: $app-icon-size;
+        display: block;
+    }
+
+    .progress-message {
+        margin-left: $app-icon-size;
+        display: block;
+        font-size: 11pt;
+        color: #888;
+    }
+}

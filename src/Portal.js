@@ -6,14 +6,11 @@ import { Set } from 'immutable';
 import { Login, lookupLogins, getSite, getLoginsDb, resetLogins } from './Logins.js';
 import { AuthenticatorModal } from './Authenticator.js';
 import { parseKiteAppUrl } from './polyfill/Common.js';
+import { updateApp, AppInstallItem } from './polyfill/Updates.js';
 
 import './Portal.scss';
 
 const E = React.createElement
-
-function appManifestAddress(app) {
-    return `https://${app}/manifest.json`;
-}
 
 class KiteMissingApps {
     constructor (missingApps) {
@@ -86,7 +83,7 @@ const PortalModalState = {
 
 class ConnectingAnimation extends React.Component {
     render() {
-        return E('div', { className: 'kite-connecting' },
+        return E('span', { className: 'kite-connecting' },
                  E('i', { className: 'kite-connecting-dot' }),
                  E('i', { className: 'kite-connecting-dot' }),
                  E('i', { className: 'kite-connecting-dot' }))
@@ -158,16 +155,16 @@ class PortalModal extends React.Component {
                               'Try again'));
             break;
         case PortalModalState.Connecting:
-            explanation = [ E(ConnectingAnimation),
-                            E(DelayedGroup, { delay: 5000 },
+            explanation = [ E(ConnectingAnimation, { key: 'connecting-animation' }),
+                            E(DelayedGroup, { delay: 5000, key: 'connecting-delay-message' },
                               E('p', null, 'This seems to be taking a bit, click ',
                                 E('a', { href: '#', onClick: this.props.requestNewLogin }, 'here'),
                                 ' to reconnect')) ];
             break;
         }
 
-        return E('div', { className: 'kite-auth-modal' },
-                 E('header', { className: 'kite-auth-modal-header' },
+        return E('div', { className: 'kite-auth-modal kite-modal' },
+                 E('header', { className: 'kite-modal-header' },
                    E('h3', {}, 'Authenticating with Kite')),
                  E('p', { className: 'kite-auth-explainer' },
                    explanation))
@@ -181,75 +178,12 @@ class PortalAuthOpensEvent {
     }
 }
 
-class AppInstallItem extends React.Component {
-    constructor() {
-        super()
-        this.state = { }
-    }
-
-    componentDidMount() {
-        fetch(appManifestAddress(this.props.app))
-            .then((r) => {
-                if ( r.status == 200 )
-                    return r.json().then((mf) => this.setState({ appInfo: mf }))
-            })
-            .catch((e) => this.setState({error: e}))
-    }
-
-    render() {
-        if ( this.state.appInfo ) {
-            var selectedClass = ''
-            var progress
-
-            if ( this.props.selected )
-                selectedClass = 'kite-app--selected'
-
-            if ( this.props.installing ) {
-                selectedClass = 'kite-app--installing'
-
-                if ( this.props.progress.finished )
-                    progress = 'Complete'
-                else if ( this.props.progress.error ) {
-                    progress = E('div', { className: 'uk-alert uk-alert-danger' }, `${this.props.progress.error}`);
-                } else {
-                    progress = [
-                        E('div', {className: 'progress-message'}, this.props.progress.message),
-                        E('progress', { className: 'uk-progress',
-                                        value: this.props.progress.complete,
-                                        max: this.props.progress.total })
-                    ]
-                }
-            }
-
-            return E('div', { className: `kite-app ${selectedClass}` },
-                     E('img', { className: 'kite-app-icon',
-                                src: this.state.appInfo.icon }),
-                     E('span', { className: 'kite-app-name' },
-                       this.state.appInfo.name),
-                     progress)
-        } else {
-            var error
-
-            if ( this.state.error ) {
-                error = E('i', { className: 'kite-app-error-indicator fa fa-fw fa-warning',
-                                 'uk-tooltip': `${this.state.error}`})
-            }
-
-            return E('div', { className: 'kite-app kite-app--loading' },
-                     error,
-                     E('i', { className: 'fa fa-fw fa-spin fa-circle-o-notch kite-app-indicator' }),
-                     E('span', { className: 'kite-app-loading-message' },
-                       this.props.app))
-        }
-    }
-}
-
 export class PortalAuthenticator extends EventTarget('open', 'error') {
     constructor(flocks, site, oldFetch, permissions) {
         super()
 
         this.modalContainer = document.createElement("div");
-        this.modalContainer.classList.add("kite-auth-modal-backdrop");
+        this.modalContainer.classList.add("kite-modal-backdrop");
 
         document.body.appendChild(this.modalContainer)
 
@@ -562,8 +496,8 @@ class PermissionsModal extends React.Component {
             break;
         }
 
-        return E('div', {className: 'kite-auth-modal'},
-                 E('header', {className: 'kite-auth-modal-header'},
+        return E('div', {className: 'kite-auth-modal kite-modal'},
+                 E('header', {className: 'kite-modal-header'},
                    E('h3', {}, 'Authenticate with Kite')),
                  body)
     }
@@ -596,7 +530,6 @@ export class PortalServer {
 
         window.addEventListener('message', (e) => {
             var { type, display, request } = e.data
-            console.log("Got message", e, type == 'start-auth', this.state == PortalServerState.WaitingToStart)
             if ( type == 'start-auth' && this.state == PortalServerState.WaitingToStart ) {
                 this.display = display
                 // Attempt to look up any logins we have available at this
@@ -671,6 +604,7 @@ export class PortalServer {
         this.modalContainer = document.createElement('div')
         this.modalContainer.classList.add('kite-auth-modal-backdrop')
 
+        document.body.classList.add('kite-portal-server')
         document.body.appendChild(this.modalContainer)
     }
 
@@ -703,8 +637,6 @@ export class PortalServer {
             'ttl': ttl,
             'for_site': site
         }
-
-        fetch('kite+app://admin.flywithkite.com/me', { method: 'GET', kiteClient: this.flockClient }).then((r) => r.json()).then((r) => console.log("Got admin", r))
 
         return fetch('kite+app://admin.flywithkite.com/tokens',
                      { method: 'POST',
@@ -778,53 +710,6 @@ export class PortalServer {
         this.updateModal();
     }
 
-    startAppInstallation(app, progressFunc) {
-        return new Promise((resolve, reject) => {
-            var processResponse =
-                ({state, progress, status_url}) => {
-                    console.log("Got response", state, progress, status_url)
-
-                    if ( state == 'installed' ) {
-                        progressFunc({finished: true})
-                        resolve()
-                    } else if ( state == 'error' ) {
-                        progressFunc({error: progress.message})
-                        reject(progress.message)
-                    } else {
-                        progressFunc(progress)
-
-                        var retries = 0
-                        var poll = () => {
-                            fetch(`kite+app://admin.flywithkite.com${status_url}`, {method: 'GET', kiteClient: this.flockClient,
-                                                                                    cache: 'no-store'})
-                                .then((r) => {
-                                    if ( r.status == 200 ) {
-                                        retries = 0
-                                        return r.json().then(processResponse)
-                                    } else {
-                                        retries += 1
-                                        if (retries > 7)
-                                            return Promise.reject(`Bad status: ${r.status}`)
-                                        else
-                                            timeout = setTimeout(poll, 2000)
-                                    }})
-                        }
-
-                        setTimeout(poll, 2000)
-                    }
-                }
-            fetch(`kite+app://admin.flywithkite.com/me/applications/${app}`,
-                  { method: 'PUT', kiteClient: this.flockClient })
-                .then((r) => {
-                    if ( r.status == 200 || r.status == 202 )
-                        return r.json().then(processResponse)
-                    else
-                        return Promise.reject(`Bad status: ${r.status}`)
-                })
-                .catch(reject)
-        })
-    }
-
     filterPermissions(perms, apps) {
         return perms.filter((perm) => apps.some((app) => perm.startsWith(`kite+perm://${app}`)))
     }
@@ -861,7 +746,7 @@ export class PortalServer {
         this.applicationProgress = {}
         apps.map((app) => {
             this.applicationProgress[app] = { total: 0, complete: 0 }
-            this.startAppInstallation(app, (progress) => { this.applicationProgress[app] = progress; this.updateModal(); })
+            updateApp(fetch, this.flockClient, app, (progress) => { this.applicationProgress[app] = progress; this.updateModal(); })
                 .then(() => { this.applicationProgress[app] = { finished: true };
                               this.finishApplications();
                               this.updateModal(); })

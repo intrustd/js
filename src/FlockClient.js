@@ -213,7 +213,6 @@ export class FlockSocket extends EventTarget {
     }
 
     close() {
-        console.log("Close data channel")
         this.data_chan.close()
         delete this.data_chan
     }
@@ -377,7 +376,6 @@ export class FlockClient extends EventTarget {
         });
         this.websocket.addEventListener('message', (evt) => {
             var line = this.parseLine(evt.data)
-            console.log("Got websocket message", evt.data);
             if ( line ) {
                 switch ( this.state ) {
                 case FlockClientState.Connecting:
@@ -396,11 +394,9 @@ export class FlockClient extends EventTarget {
                 case FlockClientState.CollectingPersonas:
                     switch ( line.code ) {
                     case 503:
-                        console.log("Got 503");
                         this.personas = [];
                         break;
                     case 403:
-                        console.log("Got 403");
                         // Authenticate now
                         this.state = FlockClientState.ReadyToLogin;
                         this.dispatchEvent(new FlockNeedsPersonasEvent(this));
@@ -436,7 +432,6 @@ export class FlockClient extends EventTarget {
                         this.rtc_control_channel = this.rtc_connection.createDataChannel('control', {protocol: 'control'})
                         this.rtc_control_channel.binaryType = 'arraybuffer'
                         this.rtc_control_channel.onopen = () => {
-			    console.log('channel opens')
 			    this.signalRemoteComplete()
                             this.dispatchEvent(new KiteChannelOpens(this));
                             this.rtc_control_channel.close()
@@ -447,7 +442,6 @@ export class FlockClient extends EventTarget {
                         this.answer_sent = false;
                         this.candidates = [];
 
-                        console.log("Set remote description", this.offer);
                         this.rtc_connection.setRemoteDescription({ type: 'offer',
                                                                    sdp: this.offer})
                             .then(() => { this.onSetDescription() },
@@ -474,10 +468,8 @@ export class FlockClient extends EventTarget {
                 }
             } else {
                 if ( this.state == FlockClientState.CollectingPersonas ) {
-                    console.log("Got personas", evt)
                     this.parseVCardData(evt.data);
                 } else if ( this.state == FlockClientState.StartIce ) {
-                    console.log("Got offer", evt.data);
                     this.offer = evt.data;
                 } else {
                     this.sendError(new FlockErrorEvent(evt.data));
@@ -507,7 +499,6 @@ export class FlockClient extends EventTarget {
         this.rtc_connection.createAnswer()
             .then((answer) => {
                 this.rtc_connection.setLocalDescription(answer)
-                console.log("Got answer", answer.sdp)
                 this.websocket.send(answer.sdp);
 
                 this.onAnswerSent()
@@ -515,7 +506,6 @@ export class FlockClient extends EventTarget {
     }
 
     addIceCandidate(c) {
-        console.log("got ice candidate", c);
         if ( this.answer_sent ) {
             this.sendIceCandidate(c);
         } else
@@ -546,8 +536,6 @@ export class FlockClient extends EventTarget {
             var vcards = vcard.split("\nEND:VCARD");
             vcards = vcards.map((vc) => (vc + "\nEND:VCARD").trim()).filter((vc) => vc.length > 0)
             vcards = vcards.map((vc) => vCardParser.parse(vc))
-
-            console.log("Got parsed vcards", vcards)
 
             vcards = vcards.map((vc) => {
                 if ( vc.hasOwnProperty('X-KITEID') ) {
@@ -676,8 +664,6 @@ export class FlockClient extends EventTarget {
                 }
 
                 var listener = ( e ) => {
-                    console.log("Got message event", e);
-
                     if ( cur_timer !== null ) {
                         clearTimeout(cur_timer);
                         cur_timer = null;
@@ -711,7 +697,6 @@ export class FlockClient extends EventTarget {
     }
 
     socketTCP (app_name, port) {
-        console.log("Doing socketTCP");
         if ( this.applications.hasOwnProperty(app_name) ) {
             if ( this.rtc_connection !== null ) {
                 return new FlockSocket(this, { type: 'tcp',
