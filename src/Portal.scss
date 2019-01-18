@@ -42,3 +42,25 @@
         animation-delay: 0.4s;
     }
 }
+
+.kite-permission-header {
+    min-height: 32px;
+
+    .app-icon {
+        float: left;
+        width: 32px;
+        height: 32px;
+
+        margin-right: 10px;
+
+        img {
+            max-width: 32px;
+            max-height: 32px;
+        }
+    }
+
+    .app-name {
+        display: inline-block;
+        margin-top: 3px;
+    }
+}

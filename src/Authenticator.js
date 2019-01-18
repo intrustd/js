@@ -8,6 +8,7 @@ import { FlockClient } from './FlockClient.js';
 import "./Common.scss";
 import "./Authenticator.scss";
 import { KitePermissionsError } from "./Portal.js";
+import { lookupWellKnownFlock } from "./Permalink.js";
 import { getAppliances, touchAppliance } from "./Logins.js";
 
 export function makeAbsoluteUrl(url) {
@@ -36,19 +37,15 @@ export function mintToken(perms, options) {
     if ( site !== undefined )
         request.site = site
 
-    return fetch('kite+app://admin.flywithkite.com/tokens',
+    var tokenPromise =
+        fetch('kite+app://admin.flywithkite.com/tokens',
                  { method: 'POST',
                    headers: { 'Content-type': 'application/json' },
                    body: JSON.stringify(request) })
         .then((r) => {
             switch ( r.status ) {
             case 200:
-                if ( options.format == 'query' ) {
-                    return r.json().then(({token}) => {
-                        return `?flock=${encodeURIComponent(r.kite.flock)}&appliance=${encodeURIComponent(r.kite.appliance)}&token=${token}&persona=${encodeURIComponent(r.kite.persona)}`
-                    })
-                } else
-                    return r.json()
+                return r.json().then(({token}) => { return { r, token } })
             case 400:
                 return Promise.reject(new KitePermissionsError("Unknown"))
             case 401:
@@ -56,6 +53,28 @@ export function mintToken(perms, options) {
             default:
                 return Promise.reject(new KitePermissionsError("Unknown"));
             }
+        })
+
+    return Promise.all([lookupWellKnownFlock().catch((e) => null), tokenPromise])
+        .then(([ wellKnownFlock, {r, token} ]) => {
+            if ( options.format == 'query' ) {
+                var fields = []
+
+                if ( options.requiresPersona )
+                    fields.push(`persona=${encodeURIComponent(r.kite.persona)}`)
+
+                console.log("Well-known flock is ", wellKnownFlock)
+                console.log("Our flock is", r.kite.flock)
+                if ( options.requiresFlock ||
+                     (wellKnownFlock !== null && wellKnownFlock != r.kite.flock) )
+                    fields.push(`flock=${encodeURIComponent(r.kite.flock)}`)
+
+                fields.push(`appliance=${encodeURIComponent(r.kite.appliance)}`)
+                fields.push(`token=${token}`)
+
+                return `?${fields.join('&')}`
+            } else
+                return token
         })
 }
 

@@ -129,7 +129,6 @@ class UpdatesNotification extends React.Component {
 }
 
 function updateUpdatesNotifier() {
-    console.log('update notifier', currentUpdates.isEmpty(), updateNotificationContainer)
     if ( currentUpdates.isEmpty() && updateNotificationContainer !== null ) {
         updateNotificationContainer.parentNode.removeChild(updateNotificationContainer)
         updateNotificationContainer = null
@@ -224,7 +223,6 @@ export function updateApp(fetch, kiteClient, canonAppUrl, progressFunc) {
 }
 
 export function doUpdate(fetch, client, canonAppUrl) {
-    console.log("DO UPDATE CALLED", canonAppUrl)
     setUpdateStatus(canonAppUrl, UpdateStatus.Starting)
 
     var progress = (sts) => {

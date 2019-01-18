@@ -3,10 +3,12 @@ import React from 'react';
 import ReactDom from 'react-dom';
 import { Set } from 'immutable';
 
-import { Login, lookupLogins, getSite, getLoginsDb, resetLogins } from './Logins.js';
+import { Login, lookupLogins, getSite, getLoginsDb,
+         resetLogins, rememberPermissions, lookupSavedPermissions } from './Logins.js';
 import { AuthenticatorModal } from './Authenticator.js';
 import { parseKiteAppUrl } from './polyfill/Common.js';
 import { updateApp, AppInstallItem } from './polyfill/Updates.js';
+import { KiteLoadingIndicator } from './react.js';
 
 import './Portal.scss';
 
@@ -376,7 +378,28 @@ export const PortalDisplay = {
 class PermissionsModal extends React.Component {
     constructor() {
         super()
+        this.rememberPermissionsRef = React.createRef()
         this.state = { deselectedApps: Set() }
+    }
+
+    renderPermissionsList() {
+        return E('ul', {className: 'kite-list kite-permission-list'},
+                 this.props.tokenPreview.sections.map(({domain, entries, icon, name, version}) => {
+                     var iconEl
+                     if ( icon !== undefined )
+                         iconEl = E('div', { className: 'app-icon' },
+                                    E('img', { src: icon }))
+
+                     var r = [ E('li', { className: 'kite-permission-header kite-list-header', key: `header-${domain}` },
+                                 iconEl,
+                                 E('span', { className: 'app-name' }, name)) ]
+
+                     entries.map(({short, long, icon}, i) => {
+                         r.push(E('li', { className: 'kite-permission', key: `perm-${domain}-${i}` }, short))
+                     })
+
+                     return r
+                 }))
     }
 
     render() {
@@ -413,17 +436,30 @@ class PermissionsModal extends React.Component {
             body = E('p', {className: 'kite-auth-explainer'},
                      'You are currently logged in to multiple Kites. Select which login you\'d like to use')
             break;
+        case PortalServerState.LoadingTokenPreview:
+            body = E(KiteLoadingIndicator, { key: 'loading-preview' })
+            break;
         case PortalServerState.AskForConfirmation:
-            body = [ E('p', { className: 'kite-auth-explainer' },
-                       `The page at ${this.props.origin} is asking for permission to access your Kite device`),
-                     E('ul', {className: 'kite-permission-list'},
-                       this.props.permissions.map((p) => E('li', {className: 'kite-permission'},
-                                                           p))),
-                     E('div', {className: 'kite-form-row'},
-                       E('button', {className: `kite-form-submit ${loading ? 'kite-form-submit--loading' : ''}`,
-                                    disabled: loading,
-                                    onClick: () => this.acceptPermissions()},
-                         'Accept')) ]
+            if ( this.props.tokenPreview ) {
+                body = [ E('p', { className: 'kite-auth-explainer' },
+                           `The page at ${this.props.origin} is asking for permission to access your Kite device`),
+                         this.renderPermissionsList(),
+                         E('div', {className: 'kite-form-row'},
+                           E('label', { className: 'uk-form-label' },
+                             E('input', { type: 'checkbox', className: 'uk-checkbox', ref: this.rememberPermissionsRef }),
+                             'Remember these permissions')),
+                         E('div', {className: 'kite-form-row'},
+                           E('button', {className: `kite-form-submit ${loading ? 'kite-form-submit--loading' : ''}`,
+                                        disabled: loading,
+                                        onClick: () => this.acceptPermissions() },
+                             'Accept')) ]
+            } else {
+                var error = 'Error fetching permissions preview';
+                if ( this.tokenPreview !== undefined && typeof this.tokenPreview.error == 'string' ) {
+                    error = this.tokenPreview.error
+                }
+                body = [ E('p', null, error) ]
+            }
             break;
 
         case PortalServerState.InstallingApplications:
@@ -503,7 +539,7 @@ class PermissionsModal extends React.Component {
     }
 
     acceptPermissions() {
-        this.props.onSuccess()
+        this.props.onSuccess(this.rememberPermissionsRef.current.checked)
     }
 }
 
@@ -519,7 +555,9 @@ export const PortalServerState = {
     InstallAppsRequest: Symbol('InstallAppsRequest'),
     InstallingApplications: Symbol('InstallingApplications'),
     ApplicationInstallError: Symbol('ApplicationInstallError'),
-    ApplicationsSuccess: Symbol('ApplicationsSuccess')
+    ApplicationsSuccess: Symbol('ApplicationsSuccess'),
+    AskForConfirmation: Symbol('AskForConfirmation'),
+    LoadingTokenPreview: Symbol('LoadingTokenPreview')
 }
 
 export class PortalServer {
@@ -542,9 +580,17 @@ export class PortalServer {
                 this.origin = e.origin
                 this.flocks = e.data.flocks
 
-                lookupLogins()
-                    .then((logins) => {
+                Promise.all([lookupLogins(), lookupSavedPermissions(this.origin)])
+                    .then(([logins, granted]) => {
                         this.logins = logins
+                        this.granted = granted
+                        this.respond = (r) => {
+                            e.source.postMessage(r, e.origin)
+                        }
+
+                        console.log("Looked up permissions for ", this.origin, ":", this.granted)
+
+                        this.required = Set(this.request.permissions).subtract(this.granted).toArray()
 
                         if ( logins.length == 0 ) {
                             // Prompt for a new login
@@ -562,11 +608,9 @@ export class PortalServer {
                                 login.createClient()
                                     .then((client) => {
                                         this.flockClient = client
-                                        this.state = PortalServerState.AskForConfirmation;
-                                        this.showDisplay()
+                                        this.continueWithClient()
                                     })
                                     .catch((e) => {
-                                        console.log("Got server error state")
                                         this.state = PortalServerState.Error;
                                         this.error = e;
                                         this.showDisplay()
@@ -574,10 +618,6 @@ export class PortalServer {
                             }
                         } else {
                             this.state = PortalServerState.DisplayLogins;
-                        }
-
-                        this.respond = (r) => {
-                            e.source.postMessage(r, e.origin)
                         }
 
                         this.showDisplay()
@@ -608,6 +648,46 @@ export class PortalServer {
         document.body.appendChild(this.modalContainer)
     }
 
+    continueWithClient() {
+        if ( this.required.length == 0 ) {
+            // Grant all permissions and return
+            this.onAccept(false)
+        } else {
+            this.makePreview()
+        }
+    }
+
+    makePreview() {
+        this.state = PortalServerState.LoadingTokenPreview;
+        this.tokenPreview = null
+        this.showDisplay()
+
+        fetch('kite+app://admin.flywithkite.com/tokens/preview',
+              { method: 'POST',
+                headers: { 'Content-type': 'application/json' },
+                body: JSON.stringify(this.mkTokenRequest(this.allRequestedPermissions,
+                                                         this.request.ttl,
+                                                         this.request.siteFingerprints)),
+                kiteClient: this.flockClient })
+            .then((r) => {
+                this.state = PortalServerState.AskForConfirmation
+                if ( r.status == 200 ) {
+                    return r.json().then((preview) => {
+                        this.tokenPreview = preview
+                        this.showDisplay()
+                    })
+                } else {
+                    this.tokenPreview = { error: `Invalid status: ${r.status}` }
+                    this.showDisplay()
+                }
+            })
+            .catch((e) => {
+                this.state = PortalServerState.AskForConfirmation
+                this.tokenPreview = { error: 'Error while getting permissions list' };
+                this.showDisplay()
+            })
+    }
+
     onSuccess(flockClient) {
         this.flockClient = flockClient
         this.state = PortalServerState.AskForConfirmation
@@ -631,12 +711,16 @@ export class PortalServer {
             .then(() => this.updateModal())
     }
 
-    requestPermissions(perms, ttl, site) {
-        var tokenRequest = {
+    mkTokenRequest(perms, ttl, site) {
+        return  {
             'permissions': perms,
             'ttl': ttl,
             'for_site': site
         }
+    }
+
+    requestPermissions(perms, ttl, site) {
+        var tokenRequest = this.mkTokenRequest(perms, ttl, site)
 
         return fetch('kite+app://admin.flywithkite.com/tokens',
                      { method: 'POST',
@@ -651,13 +735,17 @@ export class PortalServer {
                         .then((e) => {
                             if ( e['missing-apps'] ) {
                                 return Promise.reject(new KiteMissingApps(e['missing-apps']))
-                            } else
+                            } else {
+                                console.error("Error minting token: ", e)
                                 return Promise.reject(new KitePermissionsError('An unknown error occurred'))
+                            }
                         })
                 } else if ( r.status == 401 )
                     return Promise.reject(new KitePermissionsError('Not authorized to create this token'))
-                else
+                else {
+                    console.error("An unknown response code was received", r.status)
                     return Promise.reject(new KitePermissionsError('An unknown error occurred'))
+                }
             })
     }
 
@@ -678,20 +766,32 @@ export class PortalServer {
             })
     }
 
-    onAccept() {
+    get allRequestedPermissions() {
+        return [ 'kite+perm://admin.flywithkite.com/login',
+                 'kite+perm://admin.flywithkite.com/site',
+                 ...this.request.permissions ]
+    }
+
+    onAccept(shouldRememberPermissions) {
         // Attempt to make a token using this site ID
-        var permissions = [ 'kite+perm://admin.flywithkite.com/login',
-                            'kite+perm://admin.flywithkite.com/site',
-                            ...this.request.permissions ]
+        var permissions = this.allRequestedPermissions
 
         this.requestPermissions(permissions, this.request.ttl, this.request.siteFingerprints)
             .then(({token, expiration}) => {
-                expiration = new Date(expiration).getTime()
-                this.respond({ success: true,
-                               persona: this.flockClient.personaId,
-                               flockUrl: this.flockClient.flockUrl,
-                               applianceName: this.flockClient.appliance,
-                               exp: expiration, token })
+                var onComplete = Promise.resolve()
+
+                if ( shouldRememberPermissions ) {
+                    onComplete = rememberPermissions(this.origin, permissions)
+                }
+
+                return onComplete.then(() => {
+                    expiration = new Date(expiration).getTime()
+                    this.respond({ success: true,
+                                   persona: this.flockClient.personaId,
+                                   flockUrl: this.flockClient.flockUrl,
+                                   applianceName: this.flockClient.appliance,
+                                   exp: expiration, token })
+                })
             }).catch((e) => {
                 if ( e instanceof KiteMissingApps) {
                     this.state = PortalServerState.InstallAppsRequest
@@ -700,6 +800,7 @@ export class PortalServer {
                     this.state = PortalServerState.Error
                     this.error = `${e.message}`
                 } else {
+                    console.error("Got error", e)
                     this.state = PortalServerState.Error
                     this.error = "An unknown error occurred"
                 }
@@ -736,11 +837,7 @@ export class PortalServer {
     }
 
     doInstallApps(apps) {
-        console.log("Installing apps", apps)
-
         this.request.permissions = this.filterPermissions(this.request.permissions, apps)
-
-        console.log("Granting permissions", this.request.permissions)
 
         // Install the applications
         this.applicationProgress = {}
@@ -786,6 +883,7 @@ export class PortalServer {
                                                   missingApps: this.missingApps,
                                                   appProgress: this.applicationProgress,
                                                   installApps: this.doInstallApps.bind(this),
+                                                  tokenPreview: this.tokenPreview,
                                                   permissions: this.request.permissions,
                                                   onResetLogins: this.onResetLogins.bind(this),
                                                   onSuccess: this.onAccept.bind(this),

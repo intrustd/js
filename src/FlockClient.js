@@ -148,7 +148,7 @@ export class FlockSocket extends EventTarget {
                     this.state = 'error';
                     this.dispatchEvent(new FlockSocketErrorEvent(this, 'system-error:' + rsp.errno));
                 } else {
-                    console.log("Connected socket");
+                    // console.log("Connected socket");
                     this.state = 'connected';
                     this.dispatchEvent(new FlockSocketOpensEvent(this));
                 }

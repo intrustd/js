@@ -1,5 +1,15 @@
 export function parseKiteAppUrl(url) {
-    var url_obj = new URL(url);
+    var url_obj
+
+    try {
+        url_obj = new URL(url);
+    } catch (e) {
+        if ( e instanceof TypeError ) {
+            return { isKite: false }
+        } else
+            throw e
+    }
+
     var host = url_obj.pathname;
 
     switch ( url_obj.protocol ) {

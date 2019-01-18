@@ -74,6 +74,12 @@ export function getLoginsDb() {
     if ( loginsDb === undefined )
         loginsDb = new Promise((resolve, reject) => {
             var db = new Dexie('kite-logins');
+            db.version(10).stores({
+                login: 'token,exp,[persona_id+flock+appliance]',
+                site: 'exp',
+                appliance: 'appliance_name,last_auth_time',
+                savedPermission: '[origin+permission]'
+            })
             db.version(9).stores({
                 login: 'token,exp,[persona_id+flock+appliance]',
                 site: 'exp',
@@ -173,4 +179,18 @@ export function getAppliances() {
         .then((db) => {
             return db.appliance.orderBy('last_auth_time').reverse().toArray()
         })
+}
+
+export function rememberPermissions(origin, permissions) {
+    return getLoginsDb()
+        .then((db) =>
+              db.savedPermission.bulkPut(permissions.map((permission) => { return { origin, permission } })))
+        .then(() => { return null })
+}
+
+export function lookupSavedPermissions(origin) {
+    return getLoginsDb()
+        .then((db) => db.savedPermission.where('[origin+permission]')
+              .between([origin, Dexie.minKey], [origin, Dexie.maxKey]).toArray())
+        .then((entries) => entries.map(({permission}) => permission))
 }

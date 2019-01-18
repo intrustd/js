@@ -75,8 +75,6 @@ function validRedirect(from, to) {
 function redirectedRequest(resp, req) {
     var loc = getLocation(resp, req)
 
-    console.log("Location", loc, resp.status)
-
     if ( (resp.status >= 301 && resp.status <= 303) ||
          (resp.status >= 307 && resp.status <= 308) ) {
         console.log("Redir", validRedirect(req.url, loc))
@@ -562,7 +560,6 @@ export default function kiteFetch (req, init) {
 
                         httpRequestor.addEventListener('response', (resp) => {
                             var redirect = redirectedRequest(resp.response, clonedReq)
-                            console.log("Redirected request", redirect)
 
                             if ( redirect !== null ) {
                                 if ( redirect.type == 'error' ) {

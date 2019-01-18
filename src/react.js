@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { parseKiteAppUrl } from './polyfill/Common.js';
+import { resetLogins } from './Logins.js';
 
 import './react.scss';
 
@@ -183,6 +184,11 @@ export class KitePersonaButton extends React.Component {
             .catch((e) => console.error("error fetching info", e))
     }
 
+    doLogout(e) {
+        e.preventDefault()
+        resetLogins().then(() => { location.reload() })
+    }
+
     render() {
         if ( this.state.ourInfo ) {
             var ourInfo = this.state.ourInfo
@@ -207,7 +213,8 @@ export class KitePersonaButton extends React.Component {
                                  E('dd', null, 'Test'),
                                  E('dt', {className: 'kite-persona-info-item--days-left'}, 'Time left'),
                                  E('dd', null, 'Test'))),
-                             E('li', null, 'Log out'))));
+                             E('li', null,
+                               E('a', { 'href': '#', onClick: this.doLogout.bind(this) }, 'Log out')))));
             }
         } else {
             return E('li', {className: 'kite-persona-button kite-persona-button--loading'},
