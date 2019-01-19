@@ -64,9 +64,9 @@ export function mintToken(perms, options) {
                     fields.push(`persona=${encodeURIComponent(r.kite.persona)}`)
 
                 console.log("Well-known flock is ", wellKnownFlock)
-                console.log("Our flock is", r.kite.flock)
-                if ( options.requiresFlock ||
-                     (wellKnownFlock !== null && wellKnownFlock != r.kite.flock) )
+                console.log("Our flock is", r.kite.flock, wellKnownFlock == r.kite.flock)
+                if ( options.requiresFlock || wellKnownFlock === null ||
+                     wellKnownFlock != r.kite.flock )
                     fields.push(`flock=${encodeURIComponent(r.kite.flock)}`)
 
                 fields.push(`appliance=${encodeURIComponent(r.kite.appliance)}`)
