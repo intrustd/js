@@ -92,6 +92,18 @@ class ConnectingAnimation extends React.Component {
     }
 }
 
+class LoginList extends React.Component {
+    render() {
+        return E('ul', { className: 'kite-list kite-login-list' },
+                 this.props.logins.map((login) => {
+                     return E('li', { key: login.key,
+                                      onClick: () => { this.props.onSelect(login) }},
+                              E('span', { className: 'kite-appliance-name' }, login.applianceName),
+                              E('span', { className: 'kite-login-expiration' }, `${login.expiration}`))
+                 }))
+    }
+}
+
 class DelayedGroup extends React.Component {
     constructor() {
         super()
@@ -135,13 +147,9 @@ class PortalModal extends React.Component {
             break;
         case PortalModalState.ChooseLogin:
             explanation = E('div', { className: 'kite-form-row', key: 'choose-login'  },
-                            E('ul', { className: 'kite-list kite-login-list' },
-                              this.props.logins.map((login) => {
-                                  return E('li', { key: login.key,
-                                                   onClick: () => { this.props.selectLogin(login) }},
-                                           E('span', { className: 'kite-appliance-name' }, login.applianceName),
-                                           E('span', { className: 'kite-login-expiration' }, `${login.expiration}`))
-                              })))
+                            'You are currently logged in to multiple Kites. Select which login you\'d like to use',
+                            E(LoginList, { logins: this.props.logins,
+                                           onSelect: this.props.selectLogin }))
             break;
         case PortalModalState.NeedsPopup:
             explanation = E('div', { className: 'popup-request', key: 'popup-request' },
@@ -434,7 +442,9 @@ class PermissionsModal extends React.Component {
             break;
         case PortalServerState.DisplayLogins:
             body = E('p', {className: 'kite-auth-explainer'},
-                     'You are currently logged in to multiple Kites. Select which login you\'d like to use')
+                     'You are currently logged in to multiple Kites. Select which login you\'d like to use',
+                     E(LoginList, { logins: this.props.logins,
+                                    onSelect: this.props.onChooseLogin }))
             break;
         case PortalServerState.LoadingTokenPreview:
             body = E(KiteLoadingIndicator, { key: 'loading-preview' })
@@ -888,6 +898,7 @@ export class PortalServer {
                                                   onResetLogins: this.onResetLogins.bind(this),
                                                   onSuccess: this.onAccept.bind(this),
                                                   onRetryAfterInstall: this.onAccept.bind(this),
+                                                  onChooseLogin: this.selectLogin.bind(this),
                                                   cancelConnection: this.cancelConnection.bind(this)
                                                 }),
                             this.modalContainer)
