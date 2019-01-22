@@ -611,20 +611,7 @@ export class PortalServer {
                             if ( login.isExpired ) {
                                 this.state = PortalServerState.DisplayLogins;
                             } else {
-                                // Valid login... ask for confirmation
-                                // Attempt to login to server
-                                this.state = PortalServerState.Connecting;
-
-                                login.createClient()
-                                    .then((client) => {
-                                        this.flockClient = client
-                                        this.continueWithClient()
-                                    })
-                                    .catch((e) => {
-                                        this.state = PortalServerState.Error;
-                                        this.error = e;
-                                        this.showDisplay()
-                                    })
+                                this.selectLogin(login)
                             }
                         } else {
                             this.state = PortalServerState.DisplayLogins;
@@ -636,6 +623,23 @@ export class PortalServer {
                 window.close()
             }
         })
+    }
+
+    selectLogin(login) {
+        // Valid login... ask for confirmation
+        // Attempt to login to server
+        this.state = PortalServerState.Connecting;
+
+        login.createClient()
+            .then((client) => {
+                this.flockClient = client
+                this.continueWithClient()
+            })
+            .catch((e) => {
+                this.state = PortalServerState.Error;
+                this.error = e;
+                this.showDisplay()
+            })
     }
 
     showDisplay() {
