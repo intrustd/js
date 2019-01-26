@@ -1,7 +1,7 @@
 {
-  "name": "stork-js",
+  "name": "intrustd",
   "version": "1.0.0",
-  "description": "Stork JavaScript client",
+  "description": "Intrustd JavaScript client",
   "main": "js/Flock.js",
   "private": true,
   "scripts": {

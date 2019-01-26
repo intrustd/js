@@ -1,7 +1,6 @@
 import { DynamicArrayBuffer, BufferParser } from "./Buffer.js";
 
 const PERSONA_ID_LENGTH = 64;
-const USER_ADMIN_APP = 'stork+app:stork.net/user-admin';
 
 export class Command {
     constructor (name) {
@@ -86,23 +85,6 @@ export class DialSessionCommand extends Command {
     }
 }
 
-export class ApplicationIdentifier {
-    constructor(uri) {
-        var a = document.createElement('a');
-        a.href = uri;
-        if ( a.protocol != "stork+app:" )
-            throw new TypeError("ApplicationIdentifier: invalid protocol " + a.protocol);
-
-        this.domain = a.hostname;
-        this.app_id = a.pathname.split('/')[1];
-    }
-
-    write(buf) {
-        buf.putVarLenString(this.domain)
-            .putVarLenString(this.app_id);
-    }
-}
-
 export class Credentials {
     constructor(persona_id, creds, apps) {
         this.persona_id = persona_id;
@@ -124,7 +106,6 @@ export class Response {
         if ( parser_or_response_code instanceof BufferParser ) {
             var parser = parser_or_response_code;
             this.status = parser.getUint16();
-            console.log("Got status code", this.status);
         } else if ( typeof parser_or_response_code === "number" ){
             this.status = parser_or_response_code;
         } else
