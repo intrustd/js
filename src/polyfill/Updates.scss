@@ -5,7 +5,7 @@ $app-icon-size: 64px;
     100% { transform: none; }
 }
 
-.kite-update-notification-box {
+.intrustd-update-notification-box {
     animation: popup-bottom-left;
     animation-duration: 1s;
 
@@ -15,14 +15,14 @@ $app-icon-size: 64px;
     left: 10px;
 }
 
-.kite-app-icon {
+.intrustd-app-icon {
     width: $app-icon-size;
     height: $app-icon-size;
 
     float: left;
 }
 
-.kite-app {
+.intrustd-app {
     min-width: 200px;
 
     &:before {
@@ -39,26 +39,26 @@ $app-icon-size: 64px;
         transition: opacity 0.4s;
     }
 
-    &.kite-app--loading {
-        .kite-app-indicator {
+    &.intrustd-app--loading {
+        .intrustd-app-indicator {
             float: left;
         }
 
-        .kite-app-error-indicator {
+        .intrustd-app-error-indicator {
             float: right;
             color: red;
         }
     }
 
-    &.kite-app--selected:before {
+    &.intrustd-app--selected:before {
         visibility: visible;
     }
 
-    &.kite-app--installed:before {
+    &.intrustd-app--installed:before {
         opacity: 1;
     }
 
-    .kite-app-name {
+    .intrustd-app-name {
         margin-left: $app-icon-size;
         display: block;
     }

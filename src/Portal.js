@@ -6,27 +6,27 @@ import { Set } from 'immutable';
 import { Login, lookupLogins, getSite, getLoginsDb,
          resetLogins, rememberPermissions, lookupSavedPermissions } from './Logins.js';
 import { AuthenticatorModal } from './Authenticator.js';
-import { parseKiteAppUrl } from './polyfill/Common.js';
+import { parseAppUrl } from './polyfill/Common.js';
 import { updateApp, AppInstallItem } from './polyfill/Updates.js';
-import { KiteLoadingIndicator } from './react.js';
+import { LoadingIndicator } from './react.js';
 
 import './Portal.scss';
 
 const E = React.createElement
 
-class KiteMissingApps {
+class MissingApps {
     constructor (missingApps) {
         this.missingApps = missingApps
     }
 }
 
-export class KitePermissionsError {
+export class PermissionsError {
     constructor (msg) {
         this.message = msg
     }
 }
 
-function wrtcToKiteFingerprint({ algorithm, value }) {
+function wrtcToIntrustdFingerprint({ algorithm, value }) {
     const AlgMapping = { 'sha-256': 'SHA256' }
 
     if ( AlgMapping.hasOwnProperty(algorithm) ) {
@@ -44,7 +44,7 @@ function findPortalApp(flocks, oldFetch) {
         return oldFetch(`${proto}//${flock.url}/portal`,
                  { method: 'GET' })
             .then((rsp) => rsp.text())
-            .then((portalUrl) => `${portalUrl}#kite-auth`)
+            .then((portalUrl) => `${portalUrl}#intrustd-auth`)
             .then((portalUrl) => { return { flock, portalUrl }; })
             .catch(( e ) => {
                 if ( ix >= (flocks.length - 1) )
@@ -59,7 +59,7 @@ function findPortalApp(flocks, oldFetch) {
 
 function openPortalFrame(portalUrl) {
     var iframe = document.createElement('iframe')
-    iframe.className = 'kite-hidden-iframe';
+    iframe.className = 'intrustd-hidden-iframe';
 
     document.body.appendChild(iframe)
 
@@ -83,23 +83,14 @@ const PortalModalState = {
     Error: Symbol('Error')
 }
 
-class ConnectingAnimation extends React.Component {
-    render() {
-        return E('span', { className: 'kite-connecting' },
-                 E('i', { className: 'kite-connecting-dot' }),
-                 E('i', { className: 'kite-connecting-dot' }),
-                 E('i', { className: 'kite-connecting-dot' }))
-    }
-}
-
 class LoginList extends React.Component {
     render() {
-        return E('ul', { className: 'kite-list kite-login-list' },
+        return E('ul', { className: 'intrustd-list intrustd-login-list' },
                  this.props.logins.map((login) => {
                      return E('li', { key: login.key,
                                       onClick: () => { this.props.onSelect(login) }},
-                              E('span', { className: 'kite-appliance-name' }, login.applianceName),
-                              E('span', { className: 'kite-login-expiration' }, `${login.expiration}`))
+                              E('span', { className: 'intrustd-appliance-name' }, login.applianceName),
+                              E('span', { className: 'intrustd-login-expiration' }, `${login.expiration}`))
                  }))
     }
 }
@@ -146,8 +137,8 @@ class PortalModal extends React.Component {
             explanation = 'Requesting permissions...'; // TODO pop-up blockers
             break;
         case PortalModalState.ChooseLogin:
-            explanation = E('div', { className: 'kite-form-row', key: 'choose-login'  },
-                            'You are currently logged in to multiple Kites. Select which login you\'d like to use',
+            explanation = E('div', { className: 'intrustd-form-row', key: 'choose-login'  },
+                            'You are currently logged in to multiple Intrustd appliances. Select which login you\'d like to use',
                             E(LoginList, { logins: this.props.logins,
                                            onSelect: this.props.selectLogin }))
             break;
@@ -165,7 +156,7 @@ class PortalModal extends React.Component {
                               'Try again'));
             break;
         case PortalModalState.Connecting:
-            explanation = [ E(ConnectingAnimation, { key: 'connecting-animation' }),
+            explanation = [ E(LoadingIndicator, { key: 'connecting-animation' }),
                             E(DelayedGroup, { delay: 5000, key: 'connecting-delay-message' },
                               E('p', null, 'This seems to be taking a bit, click ',
                                 E('a', { href: '#', onClick: this.props.requestNewLogin }, 'here'),
@@ -173,10 +164,10 @@ class PortalModal extends React.Component {
             break;
         }
 
-        return E('div', { className: 'kite-auth-modal kite-modal' },
-                 E('header', { className: 'kite-modal-header' },
-                   E('h3', {}, 'Authenticating with Kite')),
-                 E('p', { className: 'kite-auth-explainer' },
+        return E('div', { className: 'intrustd-auth-modal intrustd-modal' },
+                 E('header', { className: 'intrustd-modal-header' },
+                   E('h3', {}, 'Authenticating with Intrustd')),
+                 E('p', { className: 'intrustd-auth-explainer' },
                    explanation))
     }
 }
@@ -193,7 +184,7 @@ export class PortalAuthenticator extends EventTarget('open', 'error') {
         super()
 
         this.modalContainer = document.createElement("div");
-        this.modalContainer.classList.add("kite-modal-backdrop");
+        this.modalContainer.classList.add("intrustd-modal-backdrop");
 
         document.body.appendChild(this.modalContainer)
 
@@ -252,7 +243,7 @@ export class PortalAuthenticator extends EventTarget('open', 'error') {
             { type: 'start-auth',
               permissions: this.permissions,
               ttl: 30 * 60, // TODO accept as an argument
-              siteFingerprints: this.site.getFingerprints().map(wrtcToKiteFingerprint).filter((c) => c !== null),
+              siteFingerprints: this.site.getFingerprints().map(wrtcToFingerprint).filter((c) => c !== null),
               flocks: [ this.chosenFlock ],
               display },
             this.portalOrigin)
@@ -350,7 +341,7 @@ export class PortalAuthenticator extends EventTarget('open', 'error') {
     openPopup() {
         var src = this.portalUrl
         console.log("Open popup")
-        this.portalFrame = window.open(src, 'kite-login-popup', 'width=500,height=500')
+        this.portalFrame = window.open(src, 'intrustd-login-popup', 'width=500,height=500')
         if ( this.portalFrame === null ) {
             this.state = PortalModalState.NeedsPopup
             this.doPopup = () => this.openPopup()
@@ -391,19 +382,19 @@ class PermissionsModal extends React.Component {
     }
 
     renderPermissionsList() {
-        return E('ul', {className: 'kite-list kite-permission-list'},
+        return E('ul', {className: 'intrustd-list intrustd-permission-list'},
                  this.props.tokenPreview.sections.map(({domain, entries, icon, name, version}) => {
                      var iconEl
                      if ( icon !== undefined )
                          iconEl = E('div', { className: 'app-icon' },
                                     E('img', { src: icon }))
 
-                     var r = [ E('li', { className: 'kite-permission-header kite-list-header', key: `header-${domain}` },
+                     var r = [ E('li', { className: 'intrustd-permission-header intrustd-list-header', key: `header-${domain}` },
                                  iconEl,
                                  E('span', { className: 'app-name' }, name)) ]
 
                      entries.map(({short, long, icon}, i) => {
-                         r.push(E('li', { className: 'kite-permission', key: `perm-${domain}-${i}` }, short))
+                         r.push(E('li', { className: 'intrustd-permission', key: `perm-${domain}-${i}` }, short))
                      })
 
                      return r
@@ -416,14 +407,14 @@ class PermissionsModal extends React.Component {
 
         switch ( this.props.state ) {
         case PortalServerState.WaitingToStart:
-            body = [ E('p', {className: 'kite-auth-explainer'},
+            body = [ E('p', {className: 'intrustd-auth-explainer'},
                        'Logging in to appliance...'),
 
                      E('button', { className: 'uk-button uk-button-primary' },
                        'Settings...') ]
             break;
         case PortalServerState.Error:
-            body = [ E('p', {className: 'kite-auth-explainer'},
+            body = [ E('p', {className: 'intrustd-auth-explainer'},
                        'Error: ', `${this.props.error}`),
 
                      E('button', { type: 'button',
@@ -432,7 +423,7 @@ class PermissionsModal extends React.Component {
                        'Try again') ]
             break;
         case PortalServerState.Connecting:
-            body = [ E(ConnectingAnimation),
+            body = [ E(LoadingIndicator),
                      E(DelayedGroup, { delay: 5000 },
                        E('p', null,
                          'This seems to be taking a while. Click ',
@@ -441,25 +432,25 @@ class PermissionsModal extends React.Component {
                    ]
             break;
         case PortalServerState.DisplayLogins:
-            body = E('p', {className: 'kite-auth-explainer'},
-                     'You are currently logged in to multiple Kites. Select which login you\'d like to use',
+            body = E('p', {className: 'intrustd-auth-explainer'},
+                     'You are currently logged in to multiple Intrustd appliances. Select which login you\'d like to use',
                      E(LoginList, { logins: this.props.logins,
                                     onSelect: this.props.onChooseLogin }))
             break;
         case PortalServerState.LoadingTokenPreview:
-            body = E(KiteLoadingIndicator, { key: 'loading-preview' })
+            body = E(LoadingIndicator, { key: 'loading-preview' })
             break;
         case PortalServerState.AskForConfirmation:
             if ( this.props.tokenPreview ) {
-                body = [ E('p', { className: 'kite-auth-explainer' },
-                           `The page at ${this.props.origin} is asking for permission to access your Kite device`),
+                body = [ E('p', { className: 'intrustd-auth-explainer' },
+                           `The page at ${this.props.origin} is asking for permission to access your Intrustd device`),
                          this.renderPermissionsList(),
-                         E('div', {className: 'kite-form-row'},
+                         E('div', {className: 'intrustd-form-row'},
                            E('label', { className: 'uk-form-label' },
                              E('input', { type: 'checkbox', className: 'uk-checkbox', ref: this.rememberPermissionsRef }),
                              'Remember these permissions')),
-                         E('div', {className: 'kite-form-row'},
-                           E('button', {className: `kite-form-submit ${loading ? 'kite-form-submit--loading' : ''}`,
+                         E('div', {className: 'intrustd-form-row'},
+                           E('button', {className: `intrustd-form-submit ${loading ? 'intrustd-form-submit--loading' : ''}`,
                                         disabled: loading,
                                         onClick: () => this.acceptPermissions() },
                              'Accept')) ]
@@ -475,13 +466,13 @@ class PermissionsModal extends React.Component {
         case PortalServerState.InstallingApplications:
         case PortalServerState.ApplicationInstallError:
         case PortalServerState.ApplicationsSuccess:
-            body = [ E('div', { className: 'kite-form-row', key: 'app-list' },
-                       E('ul', { className: 'kite-list kite-app-list' },
+            body = [ E('div', { className: 'intrustd-form-row', key: 'app-list' },
+                       E('ul', { className: 'intrustd-list intrustd-app-list' },
                          this.props.missingApps.map(
                              (a) => {
                                  if ( this.props.appProgress.hasOwnProperty(a) ) {
                                      return E('li', { key: a,
-                                                      className: 'kite-app-container--installing' },
+                                                      className: 'intrustd-app-container--installing' },
                                               E(AppInstallItem, { app: a, installing: true,
                                                                   progress: this.props.appProgress[a] }));
                                  }
@@ -489,14 +480,14 @@ class PermissionsModal extends React.Component {
                       ),
 
                      (this.props.state == PortalServerState.ApplicationInstallError ?
-                      E('div', { className: 'kite-form-row', key: 'confirm-list' },
+                      E('div', { className: 'intrustd-form-row', key: 'confirm-list' },
                         E('button', { className: 'uk-button uk-button-danger',
                                       onClick: this.props.installApps },
                           E('i', { className: 'fa fa-fw fa-refresh' }),
                           ' Retry')) : null ),
 
                      (this.props.state == PortalServerState.ApplicationsSuccess ?
-                      E('div', { className: 'kite-form-row', key: 'confirm-list' },
+                      E('div', { className: 'intrustd-form-row', key: 'confirm-list' },
                         E('button', { className: 'uk-button uk-button-primary',
                                       onClick: this.props.onRetryAfterInstall },
                           E('i', { className: 'fa fa-fw fa-check' }),
@@ -509,10 +500,10 @@ class PermissionsModal extends React.Component {
             var missingAppsSet = Set(this.props.missingApps)
             var appsLeft = missingAppsSet.isSuperset(this.state.deselectedApps) && !this.state.deselectedApps.isSuperset(missingAppsSet)
 
-            body = [ E('p', { className: 'kite-auth-explainer', key: 'request-explainer' },
+            body = [ E('p', { className: 'intrustd-auth-explainer', key: 'request-explainer' },
                        'The following applications are not installed on your appliance. Would you like to install them now?'),
-                     E('div', { className: 'kite-form-row', key: 'apps-list' },
-                       E('ul', { className: 'kite-list kite-app-list' },
+                     E('div', { className: 'intrustd-form-row', key: 'apps-list' },
+                       E('ul', { className: 'intrustd-list intrustd-app-list' },
                          this.props.missingApps.map(
                              (a) =>
                                  E('li', { key: a,
@@ -523,9 +514,9 @@ class PermissionsModal extends React.Component {
                                                else
                                                    this.setState({deselectedApps: this.state.deselectedApps.delete(a)})
                                            },
-                                           className: (!this.state.deselectedApps.contains(a)) ? 'kite-app-container--selected' : '' },
+                                           className: (!this.state.deselectedApps.contains(a)) ? 'intrustd-app-container--selected' : '' },
                                    E(AppInstallItem, { app: a, selected: !this.state.deselectedApps.contains(a) }))))),
-                     E('div', { className: 'kite-form-row' },
+                     E('div', { className: 'intrustd-form-row' },
                        E('button', { type: 'button',
                                      className: 'uk-button uk-button-primary',
                                      onClick: () => {
@@ -542,9 +533,9 @@ class PermissionsModal extends React.Component {
             break;
         }
 
-        return E('div', {className: 'kite-auth-modal kite-modal'},
-                 E('header', {className: 'kite-modal-header'},
-                   E('h3', {}, 'Authenticate with Kite')),
+        return E('div', {className: 'intrustd-auth-modal intrustd-modal'},
+                 E('header', {className: 'intrustd-modal-header'},
+                   E('h3', {}, 'Authenticate with Intrustd')),
                  body)
     }
 
@@ -656,9 +647,9 @@ export class PortalServer {
     showModal() {
         this.modalShown = true
         this.modalContainer = document.createElement('div')
-        this.modalContainer.classList.add('kite-auth-modal-backdrop')
+        this.modalContainer.classList.add('intrustd-auth-modal-backdrop')
 
-        document.body.classList.add('kite-portal-server')
+        document.body.classList.add('intrustd-portal-server')
         document.body.appendChild(this.modalContainer)
     }
 
@@ -676,13 +667,13 @@ export class PortalServer {
         this.tokenPreview = null
         this.showDisplay()
 
-        fetch('kite+app://admin.flywithkite.com/tokens/preview',
+        fetch('intrustd+app://admin.intrustd.com/tokens/preview',
               { method: 'POST',
                 headers: { 'Content-type': 'application/json' },
                 body: JSON.stringify(this.mkTokenRequest(this.allRequestedPermissions,
                                                          this.request.ttl,
                                                          this.request.siteFingerprints)),
-                kiteClient: this.flockClient })
+                appClient: this.flockClient })
             .then((r) => {
                 this.state = PortalServerState.AskForConfirmation
                 if ( r.status == 200 ) {
@@ -736,11 +727,11 @@ export class PortalServer {
     requestPermissions(perms, ttl, site) {
         var tokenRequest = this.mkTokenRequest(perms, ttl, site)
 
-        return fetch('kite+app://admin.flywithkite.com/tokens',
+        return fetch('intrustd+app://admin.intrustd.com/tokens',
                      { method: 'POST',
                        headers: { 'Content-type': 'application/json' },
                        body: JSON.stringify(tokenRequest),
-                       kiteClient: this.flockClient })
+                       appClient: this.flockClient })
             .then((r) => {
                 if ( r.status == 200 )
                     return r.json()
@@ -748,27 +739,27 @@ export class PortalServer {
                     return r.json()
                         .then((e) => {
                             if ( e['missing-apps'] ) {
-                                return Promise.reject(new KiteMissingApps(e['missing-apps']))
+                                return Promise.reject(new MissingApps(e['missing-apps']))
                             } else {
                                 console.error("Error minting token: ", e)
-                                return Promise.reject(new KitePermissionsError('An unknown error occurred'))
+                                return Promise.reject(new PermissionsError('An unknown error occurred'))
                             }
                         })
                 } else if ( r.status == 401 )
-                    return Promise.reject(new KitePermissionsError('Not authorized to create this token'))
+                    return Promise.reject(new PermissionsError('Not authorized to create this token'))
                 else {
                     console.error("An unknown response code was received", r.status)
-                    return Promise.reject(new KitePermissionsError('An unknown error occurred'))
+                    return Promise.reject(new PermissionsError('An unknown error occurred'))
                 }
             })
     }
 
     requestNuclear(site) {
-        return this.requestPermissions([ 'kite+perm://admin.flywithkite.com/login',
-                                         'kite+perm://admin.flywithkite.com/site',
-                                         'kite+perm://admin.flywithkite.com/nuclear' ],
+        return this.requestPermissions([ 'intrustd+perm://admin.intrustd.com/login',
+                                         'intrustd+perm://admin.intrustd.com/site',
+                                         'intrustd+perm://admin.intrustd.com/nuclear' ],
                                        7 * 24 * 60 * 60, // One week
-                                       site.getFingerprints().map(wrtcToKiteFingerprint).filter((c) => c !== null))
+                                       site.getFingerprints().map(wrtcToFingerprint).filter((c) => c !== null))
 
     }
 
@@ -781,8 +772,8 @@ export class PortalServer {
     }
 
     get allRequestedPermissions() {
-        return [ 'kite+perm://admin.flywithkite.com/login',
-                 'kite+perm://admin.flywithkite.com/site',
+        return [ 'intrustd+perm://admin.intrustd.com/login',
+                 'intrustd+perm://admin.intrustd.com/site',
                  ...this.request.permissions ]
     }
 
@@ -807,10 +798,10 @@ export class PortalServer {
                                    exp: expiration, token })
                 })
             }).catch((e) => {
-                if ( e instanceof KiteMissingApps) {
+                if ( e instanceof MissingApps) {
                     this.state = PortalServerState.InstallAppsRequest
                     this.missingApps = e.missingApps
-                } else if ( e instanceof KitePermissionsError ) {
+                } else if ( e instanceof PermissionsError ) {
                     this.state = PortalServerState.Error
                     this.error = `${e.message}`
                 } else {
@@ -826,7 +817,7 @@ export class PortalServer {
     }
 
     filterPermissions(perms, apps) {
-        return perms.filter((perm) => apps.some((app) => perm.startsWith(`kite+perm://${app}`)))
+        return perms.filter((perm) => apps.some((app) => perm.startsWith(`intrustd+perm://${app}`)))
     }
 
     finishApplications() {
@@ -837,8 +828,6 @@ export class PortalServer {
                          success: success && finished,
                          errors: errors || error }
             }), { complete: true, success: true, errors: false })
-
-        console.log("Check finishApplications", complete, errors)
 
         if ( complete ) {
             if ( errors ) {

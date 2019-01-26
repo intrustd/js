@@ -3,22 +3,22 @@
     100% { opacity: 1; transform: none; }
 };
 
-.kite-auth-modal {
+.intrustd-auth-modal {
     animation: descend-modal;
     animation-duration: 1s;
     animation-iteration-count: 1;
     animation-fill-mode: forwards;
 
-    .kite-auth-explainer {
+    .intrustd-auth-explainer {
         margin: 0 30px 10px 30px;
     }
 }
 
-.kite-login-modal .kite-login-explainer {
+.intrustd-login-modal .intrustd-login-explainer {
     margin: 0 30px 10px 30px;
 }
 
-.kite-login-form {
+.intrustd-login-form {
     display: flex;
     flex-direction: column;
 

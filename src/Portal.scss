@@ -1,12 +1,12 @@
-.kite-hidden-iframe {display: none; }
+.intrustd-hidden-iframe {display: none; }
 
-.kite-list li.kite-app-container--selected {
+.intrustd-list li.intrustd-app-container--selected {
     background-color: #207ce5;
     color: white;
 
 }
 
-.kite-connecting {
+.intrustd-connecting {
     width: 48px;
     margin: 0 auto;
     display: block;
@@ -19,7 +19,7 @@
     100% { transform: scale(1); background-color: #555; }
 }
 
-.kite-connecting-dot {
+.intrustd-connecting-dot {
     display: inline-block;
     width: 8px;
     height: 8px;
@@ -43,7 +43,7 @@
     }
 }
 
-.kite-permission-header {
+.intrustd-permission-header {
     min-height: 32px;
 
     .app-icon {

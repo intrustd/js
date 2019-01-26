@@ -73,7 +73,7 @@ export class Login {
 export function getLoginsDb() {
     if ( loginsDb === undefined )
         loginsDb = new Promise((resolve, reject) => {
-            var db = new Dexie('kite-logins');
+            var db = new Dexie('intrustd-logins');
             db.version(10).stores({
                 login: 'token,exp,[persona_id+flock+appliance]',
                 site: 'exp',

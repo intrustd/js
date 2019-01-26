@@ -7,7 +7,7 @@ import { FlockClient } from './FlockClient.js';
 
 import "./Common.scss";
 import "./Authenticator.scss";
-import { KitePermissionsError } from "./Portal.js";
+import { PermissionsError } from "./Portal.js";
 import { lookupWellKnownFlock } from "./Permalink.js";
 import { getAppliances, touchAppliance } from "./Logins.js";
 
@@ -38,7 +38,7 @@ export function mintToken(perms, options) {
         request.site = site
 
     var tokenPromise =
-        fetch('kite+app://admin.flywithkite.com/tokens',
+        fetch('intrustd+app://admin.intrustd.com/tokens',
                  { method: 'POST',
                    headers: { 'Content-type': 'application/json' },
                    body: JSON.stringify(request) })
@@ -47,11 +47,11 @@ export function mintToken(perms, options) {
             case 200:
                 return r.json().then(({token}) => { return { r, token } })
             case 400:
-                return Promise.reject(new KitePermissionsError("Unknown"))
+                return Promise.reject(new PermissionsError("Unknown"))
             case 401:
-                return Promise.reject(new KitePermissionsError("Not authorized to create this token"));
+                return Promise.reject(new PermissionsError("Not authorized to create this token"));
             default:
-                return Promise.reject(new KitePermissionsError("Unknown"));
+                return Promise.reject(new PermissionsError("Unknown"));
             }
         })
 
@@ -61,15 +61,15 @@ export function mintToken(perms, options) {
                 var fields = []
 
                 if ( options.requiresPersona )
-                    fields.push(`persona=${encodeURIComponent(r.kite.persona)}`)
+                    fields.push(`persona=${encodeURIComponent(r.intrustd.persona)}`)
 
                 console.log("Well-known flock is ", wellKnownFlock)
-                console.log("Our flock is", r.kite.flock, wellKnownFlock == r.kite.flock)
+                console.log("Our flock is", r.intrustd.flock, wellKnownFlock == r.intrustd.flock)
                 if ( options.requiresFlock || wellKnownFlock === null ||
-                     wellKnownFlock != r.kite.flock )
-                    fields.push(`flock=${encodeURIComponent(r.kite.flock)}`)
+                     wellKnownFlock != r.intrustd.flock )
+                    fields.push(`flock=${encodeURIComponent(r.intrustd.flock)}`)
 
-                fields.push(`appliance=${encodeURIComponent(r.kite.appliance)}`)
+                fields.push(`appliance=${encodeURIComponent(r.intrustd.appliance)}`)
                 fields.push(`token=${token}`)
 
                 return `?${fields.join('&')}`
@@ -149,7 +149,7 @@ export class AuthenticatorModal extends React.Component {
         var error
 
         if ( this.state.error ) {
-            error = E('div', {className: 'kite-form-error'},
+            error = E('div', {className: 'intrustd-form-error'},
                       this.state.error)
         }
 
@@ -158,47 +158,47 @@ export class AuthenticatorModal extends React.Component {
         if ( typeof this.state.personas == 'object' ) {
             if ( this.state.personas.length == 0 ) {
             } else {
-                personas = E('div', {className: 'kite-form-row'},
-                             E('ul', {className: 'kite-list kite-persona-list'},
+                personas = E('div', {className: 'intrustd-form-row'},
+                             E('ul', {className: 'intrustd-list intrustd-persona-list'},
                                this.state.personas.map(
                                    (p, ix) => {
                                        var loginBox
 
                                        if ( this.state.selectedPersona == ix )
-                                           loginBox = E('input', { className: 'kite-form-input', ref: this.passwordRef,
+                                           loginBox = E('input', { className: 'intrustd-form-input', ref: this.passwordRef,
                                                                    onKeyDown: this.onKeyDown.bind(this),
                                                                    type: 'password', placeholder: 'Password' })
 
                                        return E('li', {key: p.id, className: (this.state.selectedPersona == ix ? 'active' : ''),
                                                        onClick: () => { this.selectPersona(ix) }},
-                                                E('div', {className: 'kite-display-name'}, p.displayname),
+                                                E('div', {className: 'intrustd-display-name'}, p.displayname),
                                                 loginBox)
                                    })))
             }
         } else if ( typeof this.state.appliances == 'object' ) {
-            appliances = E('div', { className: 'kite-form-row' },
-                           E('ul', { className: 'kite-list kite-appliance-list' },
+            appliances = E('div', { className: 'intrustd-form-row' },
+                           E('ul', { className: 'intrustd-list intrustd-appliance-list' },
                              this.state.appliances.map(
                                  (app, ix) =>
                                      E('li', { key: app.appliance_name,
                                                onClick: () => { this.continueLogin(app.appliance_name) } },
-                                       E('span', { className: 'kite-appliance-name' }, app.appliance_name),
-                                       E('span', { className: 'kite-appliance-last-login'}, app.last_auth_time.toString()))
+                                       E('span', { className: 'intrustd-appliance-name' }, app.appliance_name),
+                                       E('span', { className: 'intrustd-appliance-last-login'}, app.last_auth_time.toString()))
                              )))
         } else
-            appliances = E('div', { className: 'kite-form-row' },
+            appliances = E('div', { className: 'intrustd-form-row' },
                            E('i', { className: 'fa fa-fw fa-3x fa-spin fa-circle-o-notch' }))
 
         var origin = this.props.origin || location.origin;
 
-        return E('div', {className: 'kite-auth-modal kite-modal'},
-                 E('header', {className: 'kite-modal-header'},
-                   E('h3', null, 'Authenticate with Kite')),
-                 E('p', {className: 'kite-auth-explainer'},
-                   `The page at ${origin} is requesting to log in to your Kite device.`),
-                 E('div', {className: 'kite-login-form'},
+        return E('div', {className: 'intrustd-auth-modal intrustd-modal'},
+                 E('header', {className: 'intrustd-modal-header'},
+                   E('h3', null, 'Authenticate with Intrustd')),
+                 E('p', {className: 'intrustd-auth-explainer'},
+                   `The page at ${origin} is requesting to log in to your Intrustd device.`),
+                 E('div', {className: 'intrustd-login-form'},
                    error,
-                   E('div', {className: 'kite-form-row'},
+                   E('div', {className: 'intrustd-form-row'},
                      E('div', {className: 'form-control'},
                        E('input', {className: 'form-input', disabled: this.state.loading,
                                    name: 'appliance-name', id: 'appliance-name',
@@ -207,8 +207,8 @@ export class AuthenticatorModal extends React.Component {
                                    onKeyDown: this.onKeyDown.bind(this) }))),
                    appliances,
                    personas,
-                   E('div', {className: 'kite-form-row'},
-                     E('button', {className: `kite-form-submit ${loading ? 'kite-form-submit--loading' : ''}`,
+                   E('div', {className: 'intrustd-form-row'},
+                     E('button', {className: `intrustd-form-submit ${loading ? 'intrustd-form-submit--loading' : ''}`,
                                   disabled: loading,
                                   onClick: () => this.continueLogin() },
                        goButton))));
@@ -262,7 +262,7 @@ export class Authenticator extends EventTarget('open', 'error') {
         super();
 
         this.modalContainer = document.createElement("div");
-        this.modalContainer.classList.add("kite-modal-backdrop");
+        this.modalContainer.classList.add("intrustd-modal-backdrop");
 
         document.body.appendChild(this.modalContainer)
 
@@ -316,7 +316,7 @@ class LoginBox extends React.Component {
 
         if ( !this.state.loading ) {
             this.setState({loading: true})
-            fetch('kite+app://admin.flywithkite.com/login',
+            fetch('intrustd+app://admin.intrustd.com/login',
                   { method: 'POST',
                     body: pw })
                 .then((r) => {
@@ -339,29 +339,29 @@ class LoginBox extends React.Component {
         var error
 
         if ( this.state.error ) {
-            error = E('div', { className: 'kite-form-error' },
+            error = E('div', { className: 'intrustd-form-error' },
                       'Invalid credentials')
         }
 
-        return E('div', { className: 'kite-login-modal kite-modal' },
-                 E('header', { className: 'kite-modal-header' },
+        return E('div', { className: 'intrustd-login-modal intrustd-modal' },
+                 E('header', { className: 'intrustd-modal-header' },
                    E('h3', null, 'Authorization')),
-                 E('p', { className: 'kite-login-explainer' },
+                 E('p', { className: 'intrustd-login-explainer' },
                    'Please enter your password to complete this action'),
                  error,
-                 E('div', { className: 'kite-login-form' },
-                   E('div', { className: 'kite-form-row' },
+                 E('div', { className: 'intrustd-login-form' },
+                   E('div', { className: 'intrustd-form-row' },
                      E('div', { className: 'form-control' },
-                       E('input', { className: 'form-input', name: 'kite-password',
+                       E('input', { className: 'form-input', name: 'intrustd-password',
                                     placeholder: 'Password', type: 'password',
                                     ref: this.passwordBoxRef,
                                     onKeyDown: this.onKeyDown.bind(this) }))),
-                   E('div', { className: 'kite-form-row' },
-                     E('button', { className: `kite-form-cancel ${loading ? 'kite-form-cancel--loading' : '' }`,
+                   E('div', { className: 'intrustd-form-row' },
+                     E('button', { className: `intrustd-form-cancel ${loading ? 'intrustd-form-cancel--loading' : '' }`,
                                    disabled: loading,
                                    onClick: this.cancel.bind(this) },
                        'Cancel'),
-                     E('button', { className: `kite-form-submit ${loading ? 'kite-form-submit--loading' : '' }`,
+                     E('button', { className: `intrustd-form-submit ${loading ? 'intrustd-form-submit--loading' : '' }`,
                                    disabled: loading,
                                    onClick: this.submit.bind(this) },
                        'Login'))))
@@ -370,7 +370,7 @@ class LoginBox extends React.Component {
 
 export function attemptLogin() {
     var modalContainer = document.createElement("div");
-    modalContainer.classList.add("kite-modal-backdrop")
+    modalContainer.classList.add("intrustd-modal-backdrop")
 
     document.body.appendChild(modalContainer)
 

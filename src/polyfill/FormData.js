@@ -1,6 +1,6 @@
 import{ BlobReader, Base64Encoder } from './Streams.js';
 
-export function generateKiteBoundary() {
+export function generateFormBoundary() {
     var random = "";
     var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -9,7 +9,7 @@ export function generateKiteBoundary() {
         random += chars.charAt(charIndex)
     }
 
-    var boundary = `----KiteFormBoundary${random}`
+    var boundary = `----IntrustdFormBoundary${random}`
     return { boundary,
              contentType: `multipart/form-data; boundary=${boundary}` }
 }

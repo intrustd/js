@@ -1,36 +1,36 @@
-import kiteFetch from './FetchApi.js'
-import kiteXMLHttpRequest from './XhrApi.js'
+import ourFetch from './FetchApi.js'
+import ourXMLHttpRequest from './XhrApi.js'
 
-export default function installKite(options) {
+export default function install(options) {
     if ( options === undefined )
         options = {}
 
     // Set this option if you want to enable explicit logins as part
     // of your app.
     if ( options.require_login ) {
-        kiteFetch.require_login = true;
+        ourFetch.require_login = true;
     }
 
     if ( options.permissions instanceof Array )
-        kiteFetch.permissions = options.permissions
+        ourFetch.permissions = options.permissions
     else
-        kiteFetch.permissions = []
+        ourFetch.permissions = []
 
     if ( options.rewrite instanceof Object )
-        kiteFetch.rewrite = options.rewrite
+        ourFetch.rewrite = options.rewrite
     else
-        kiteFetch.rewrite = {}
+        ourFetch.rewrite = {}
 
     if ( options.appName !== undefined )
-        kiteFetch.appName = options.appName
+        ourFetch.appName = options.appName
     else
-        kiteFetch.appName = location.host
+        ourFetch.appName = location.host
 
     if ( options.requiredVersion !== undefined )
-        kiteFetch.requiredVersions[kiteFetch.appName] = options.requiredVersion
+        ourFetch.requiredVersions[ourFetch.appName] = options.requiredVersion
 
     if ( typeof options.requiredVersions == 'object' )
-        kiteFetch.requiredVersions = options.requiredVersions
+        ourFetch.requiredVersions = options.requiredVersions
 
     if ( options.autoUpdate === undefined &&
          ( options.requiredVersion !== undefined ||
@@ -38,27 +38,27 @@ export default function installKite(options) {
         options.autoUpdate = true
 
     if ( options.autoUpdate !== undefined )
-        kiteFetch.autoUpdate = options.autoUpdate
+        ourFetch.autoUpdate = options.autoUpdate
     else
-        kiteFetch.autoUpdate = false
+        ourFetch.autoUpdate = false
 
     if ( options.httpAuthentication !== undefined )
-        kiteFetch.httpAuthentication = options.httpAuthentication
+        ourFetch.httpAuthentication = options.httpAuthentication
     else
-        kiteFetch.httpAuthentication = true
+        ourFetch.httpAuthentication = true
 
     if ( options.autoLogin !== undefined )
-        kiteFetch.autoLogin = options.autoLogin
+        ourFetch.autoLogin = options.autoLogin
     else
-        kiteFetch.autoLogin = true
+        ourFetch.autoLogin = true
 
     if ( options.loginHook !== undefined )
-        kiteFetch.loginHook = options.loginHook
+        ourFetch.loginHook = options.loginHook
     else
-        kiteFetch.loginHook = function () { }
+        ourFetch.loginHook = function () { }
 
-    window.XMLHttpRequest = kiteXMLHttpRequest
-    window.fetch = kiteFetch
+    window.XMLHttpRequest = ourXMLHttpRequest
+    window.fetch = ourFetch
 }
 
-window.installKite = installKite
+window.installIntrustd = install

@@ -52,13 +52,13 @@ export class AppInstallItem extends React.Component {
             var progress
 
             if ( this.props.selected )
-                selectedClass = 'kite-app--selected'
+                selectedClass = 'intrustd-app--selected'
 
             if ( this.props.installing ) {
                 if ( this.props.progress.finished )
-                    selectedClass = 'kite-app--installed'
+                    selectedClass = 'intrustd-app--installed'
                 else
-                    selectedClass = 'kite-app--installing'
+                    selectedClass = 'intrustd-app--installing'
 
                 if ( this.props.progress.error ) {
                     progress = [ E('div', { className: 'uk-alert uk-alert-danger', key: 'alert'}, `${this.props.progress.error}`) ];
@@ -84,24 +84,24 @@ export class AppInstallItem extends React.Component {
                 }
             }
 
-            return E('div', { className: `kite-app ${selectedClass}` },
-                     E('img', { className: 'kite-app-icon',
+            return E('div', { className: `intrustd-app ${selectedClass}` },
+                     E('img', { className: 'intrustd-app-icon',
                                 src: this.state.appInfo.icon }),
-                     E('span', { className: 'kite-app-name' },
+                     E('span', { className: 'intrustd-app-name' },
                        this.state.appInfo.name),
                      progress)
         } else {
             var error
 
             if ( this.state.error ) {
-                error = E('i', { className: 'kite-app-error-indicator fa fa-fw fa-warning',
+                error = E('i', { className: 'intrustd-app-error-indicator fa fa-fw fa-warning',
                                  'uk-tooltip': `${this.state.error}`})
             }
 
-            return E('div', { className: 'kite-app kite-app--loading' },
+            return E('div', { className: 'intrustd-app intrustd-app--loading' },
                      error,
-                     E('i', { className: 'fa fa-fw fa-spin fa-circle-o-notch kite-app-indicator' }),
-                     E('span', { className: 'kite-app-loading-message' },
+                     E('i', { className: 'fa fa-fw fa-spin fa-circle-o-notch intrustd-app-indicator' }),
+                     E('span', { className: 'intrustd-app-loading-message' },
                        this.props.app))
         }
     }
@@ -116,11 +116,11 @@ class UpdatesNotification extends React.Component {
 
     render() {
         return [
-            E('header', { className: 'kite-modal-header' },
+            E('header', { className: 'intrustd-modal-header' },
               E('h3', null, 'Updating...')),
-            E('ul', { className: 'kite-list kite-app-list' },
+            E('ul', { className: 'intrustd-list intrustd-app-list' },
               Array.from(this.props.updates.entries()).map(([appName, { status, props }]) => {
-                  return E('li', { className: 'kite-app-container--updating' },
+                  return E('li', { className: 'intrustd-app-container--updating' },
                            E(AppInstallItem, { app: appName, installing: true,
                                                selected: false, progress: props }))
               }))
@@ -135,8 +135,8 @@ function updateUpdatesNotifier() {
 
     } else if ( !currentUpdates.isEmpty() && updateNotificationContainer === null ) {
         updateNotificationContainer = document.createElement('div')
-        updateNotificationContainer.classList.add('kite-modal')
-        updateNotificationContainer.classList.add('kite-update-notification-box')
+        updateNotificationContainer.classList.add('intrustd-modal')
+        updateNotificationContainer.classList.add('intrustd-update-notification-box')
 
         document.body.appendChild(updateNotificationContainer)
     }
@@ -176,7 +176,7 @@ function setUpdateStatus(app, status, props) {
     updateUpdatesNotifier()
 }
 
-export function updateApp(fetch, kiteClient, canonAppUrl, progressFunc) {
+export function updateApp(fetch, appClient, canonAppUrl, progressFunc) {
     return new Promise((resolve, reject) => {
         var processResponse =
             ({state, progress, status_url}) => {
@@ -192,8 +192,9 @@ export function updateApp(fetch, kiteClient, canonAppUrl, progressFunc) {
 
                     var retries = 0
                     var poll = () => {
-                        fetch(`kite+app://admin.flywithkite.com${status_url}`, {method: 'GET', kiteClient,
-                                                                                cache: 'no-store'})
+                        fetch(`intrustd+app://admin.intrustd.com${status_url}`,
+                              {method: 'GET', appClient,
+                               cache: 'no-store'})
                             .then((r) => {
                                 if ( r.status == 200 ) {
                                     retries = 0
@@ -210,8 +211,8 @@ export function updateApp(fetch, kiteClient, canonAppUrl, progressFunc) {
                     setTimeout(poll, 2000)
                 }
             }
-        fetch(`kite+app://admin.flywithkite.com/me/applications/${canonAppUrl}`,
-              { method: 'PUT', kiteClient })
+        fetch(`intrustd+app://admin.intrustd.com/me/applications/${canonAppUrl}`,
+              { method: 'PUT', appClient })
             .then((r) => {
                 if ( r.status == 200 || r.status == 202 )
                     return r.json().then(processResponse)

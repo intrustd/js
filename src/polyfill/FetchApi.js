@@ -5,8 +5,8 @@ import { FlockClient } from "../FlockClient.js";
 import { Authenticator, attemptLogin } from "../Authenticator.js";
 import { PortalAuthenticator } from "../Portal.js";
 import { PermalinkAuthenticator, isPermalink } from "../Permalink.js";
-import { parseKiteAppUrl, kiteAppCanonicalUrl } from "./Common.js";
-import { generateKiteBonudary, makeFormDataStream } from "./FormData.js";
+import { parseAppUrl, appCanonicalUrl } from "./Common.js";
+import { generateFormBoundary, makeFormDataStream } from "./FormData.js";
 import { BlobReader } from "./Streams.js";
 import { CacheControl } from "./Cache.js";
 import { doUpdate } from "./Updates.js";
@@ -67,7 +67,7 @@ function validRedirect(from, to) {
 
     if ( fromUrl.scheme == 'http' && toUrl.scheme == 'https') return true
 
-    if ( fromUrl.scheme == 'kite+app' ) return true
+    if ( fromUrl.scheme == 'intrustd+app' ) return true
 
     return false
 }
@@ -109,7 +109,7 @@ function redirectedRequest(resp, req) {
         return null
 }
 
-class KiteOpaqueRedirectResponse extends Response {
+class OurOpaqueRedirectResponse extends Response {
     constructor(actualResponse) {
         super("", { status: 0 })
         this.responnse
@@ -226,9 +226,9 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
                     window.cancelAnimationFrame(frameRequested)
                 this.sendPartialLoadEvent(totalBody)
                 var response = new Response(responseBlob, this.response)
-                response.kite = { 'flock': this.socket.conn.flockUrl,
-                                  'appliance': this.socket.conn.appliance,
-                                  'persona': this.socket.conn.personaId };
+                response.intrustd = { 'flock': this.socket.conn.flockUrl,
+                                      'appliance': this.socket.conn.appliance,
+                                      'persona': this.socket.conn.personaId };
 
                 this.dispatchEvent(new HTTPResponseEvent(response, responseBlob))
                 this.cleanupSocket()
@@ -341,7 +341,7 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
             return Promise.resolve({ length: body.length,
                                      bodyStream: BlobReader(blob) })
         } else if ( body instanceof FormData ) {
-            var boundary = generateKiteBoundary()
+            var boundary = generateFormBoundary()
             return this.calculateBodyLengthStream(makeFormDataStream(body, boundary.boundary))
                 .then((o) => { o.contentType = boundary.contentType; return o })
         } else if ( body instanceof BufferSource ) {
@@ -386,7 +386,7 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
 var globalClient;
 
 function chooseNewAppliance(flocks, site) {
-    if ( kiteFetch.require_login ) {
+    if ( ourFetch.require_login ) {
         return new Promise((resolve, reject) => {
             var chooser = new Authenticator(flocks, site)
             chooser.addEventListener('error', (e) => {
@@ -408,7 +408,7 @@ function chooseNewAppliance(flocks, site) {
         if ( isPermalink() ) {
             mkAuth = () => { return new PermalinkAuthenticator() }
         } else {
-            mkAuth = () => { return new PortalAuthenticator(flocks, site, oldFetch, kiteFetch.permissions) }
+            mkAuth = () => { return new PortalAuthenticator(flocks, site, oldFetch, ourFetch.permissions) }
         }
 
         return new Promise((resolve, reject) => {
@@ -448,18 +448,18 @@ function isVersionOlder(a, b) {
 }
 
 function updateApp(client, canonAppUrl) {
-    if ( kiteFetch.updatedApps[canonAppUrl] === undefined ) {
-        if ( kiteFetch.requiredVersions[canonAppUrl] === undefined )
-            kiteFetch.updatedApps[canonAppUrl] = Promise.resolve()
+    if ( ourFetch.updatedApps[canonAppUrl] === undefined ) {
+        if ( ourFetch.requiredVersions[canonAppUrl] === undefined )
+            ourFetch.updatedApps[canonAppUrl] = Promise.resolve()
         else {
-            kiteFetch.updatedApps[canonAppUrl] = kiteFetch(`kite+app://admin.flywithkite.com/me/applications/${canonAppUrl}/manifest/current`)
+            ourFetch.updatedApps[canonAppUrl] = ourFetch(`intrustd+app://admin.intrustd.com/me/applications/${canonAppUrl}/manifest/current`)
                 .then((r) => {
                     if ( r.status == 200 ) {
                     return r.json()
                             .then(({version}) => {
-                                if ( isVersionOlder(version, kiteFetch.requiredVersions[canonAppUrl]) ) {
+                                if ( isVersionOlder(version, ourFetch.requiredVersions[canonAppUrl]) ) {
                                     // Do Update
-                                    return doUpdate(kiteFetch, client, canonAppUrl)
+                                    return doUpdate(ourFetch, client, canonAppUrl)
                                 } else
                                     return
                             })
@@ -472,22 +472,22 @@ function updateApp(client, canonAppUrl) {
         }
     }
 
-    return kiteFetch.updatedApps[canonAppUrl]
+    return ourFetch.updatedApps[canonAppUrl]
 }
 
-export default function kiteFetch (req, init) {
+export default function ourFetch (req, init) {
     var url = req;
     if ( req instanceof Request ) {
         url = req.url;
     }
 
-    var kiteUrl = parseKiteAppUrl(url);
-    if ( kiteUrl.isKite ) {
-        if ( kiteUrl.hasOwnProperty('error') )
-            throw new TypeError(kiteUrl.error)
+    var appUrl = parseAppUrl(url);
+    if ( appUrl.isApp ) {
+        if ( appUrl.hasOwnProperty('error') )
+            throw new TypeError(appUrl.error)
         else {
-            var flockUrls = kiteFetch.flockUrls;
-            var canonAppUrl = kiteUrl.app;
+            var flockUrls = ourFetch.flockUrls;
+            var canonAppUrl = appUrl.app;
             var clientPromise, clonedReq
 
             if ( init === undefined )
@@ -504,8 +504,8 @@ export default function kiteFetch (req, init) {
 
             var clonedReq = req.clone()
 
-            if ( kiteFetch.rewrite.hasOwnProperty(canonAppUrl) ) {
-                var newUrl = kiteFetch.rewrite[canonAppUrl].replace(/\[path\]/g, kiteUrl.path)
+            if ( ourFetch.rewrite.hasOwnProperty(canonAppUrl) ) {
+                var newUrl = ourFetch.rewrite[canonAppUrl].replace(/\[path\]/g, appUrl.path)
 
                 req = new Request(newUrl, { method: req.method,
                                             body: req.body,
@@ -518,12 +518,12 @@ export default function kiteFetch (req, init) {
                 return oldFetch.apply(this, [ req ])
             }
 
-            if ( init.hasOwnProperty('kiteClient') )
-                clientPromise = Promise.resolve(init['kiteClient'])
+            if ( init.hasOwnProperty('appClient') )
+                clientPromise = Promise.resolve(init['appClient'])
             else
                 clientPromise = getGlobalClient(flockUrls)
 
-            if ( kiteFetch.autoUpdate ) {
+            if ( ourFetch.autoUpdate ) {
                 clientPromise =
                     clientPromise.then((client) => {
                         return updateApp(client, canonAppUrl).then(() => client)
@@ -533,15 +533,15 @@ export default function kiteFetch (req, init) {
             var runRequest = (dev) => {
                 var tracker = ProgressManager.startFetch()
 
-                return dev.requestApps([ canonAppUrl ], { update: kiteFetch.update })
+                return dev.requestApps([ canonAppUrl ], { update: ourFetch.update })
                     .then(() => dev)
                     .then((dev) => new Promise((resolve, reject) => {
-                        var socket = dev.socketTCP(canonAppUrl, kiteUrl.port);
-                        var httpRequestor = new HTTPRequester(socket, kiteUrl, req)
+                        var socket = dev.socketTCP(canonAppUrl, appUrl.port);
+                        var httpRequestor = new HTTPRequester(socket, appUrl, req)
                         var requestTracker = tracker.subtracker(50, 100)
 
-                        if ( init.kiteOnProgress ) {
-                            httpRequestor.addEventListener('progress', init.kiteOnProgress)
+                        if ( init.intrustdOnProgress ) {
+                            httpRequestor.addEventListener('progress', init.intrustdOnProgress)
                         }
                         httpRequestor.addEventListener('progress', (p) => {
                             if ( p.lengthComputable ) {
@@ -549,8 +549,8 @@ export default function kiteFetch (req, init) {
                             }
                         })
 
-                        if ( init.kiteOnPartialLoad ) {
-                            httpRequestor.addEventListener('partialload', init.kiteOnPartialLoad)
+                        if ( init.intrustdOnPartialLoad ) {
+                            httpRequestor.addEventListener('partialload', init.intrustdOnPartialLoad)
                         }
                         httpRequestor.addEventListener('partialload', (pl) => {
                             if ( pl.total ) {
@@ -569,15 +569,15 @@ export default function kiteFetch (req, init) {
 
                                 switch ( req.redirect ) {
                                 case 'follow':
-                                    resolve(kiteFetch(redirect));
+                                    resolve(ourFetch(redirect));
                                     return;
 
                                 case 'manual':
-                                    resolve(new KiteOpaqueRedirectResponse(resp.response))
+                                    resolve(new OurOpaqueRedirectResponse(resp.response))
                                     return
 
                                 case 'error':
-                                    resolve(new KiteErrorResponse())
+                                    resolve(new OurErrorResponse()) // TODO
                                     return
 
                                 default:
@@ -594,13 +594,13 @@ export default function kiteFetch (req, init) {
                                 else
                                     schemes = schemes.split(",")
 
-                                if ( kiteFetch.autoLogin && schemes.includes("X-Kite-Login") &&
-                                     !kiteFetch.loggedIn && req.method == 'GET' ) {
+                                if ( ourFetch.autoLogin && schemes.includes("X-Intrustd-Login") &&
+                                     !ourFetch.loggedIn && req.method == 'GET' ) {
                                     attemptLogin()
                                         .then((success) => {
                                             if ( success ) {
-                                                kiteFetch.loggedIn = true
-                                                resolve(kiteFetch(req))
+                                                ourFetch.loggedIn = true
+                                                resolve(ourFetch(req))
                                             } else {
                                                 resolve(resp)
                                             }
@@ -611,14 +611,14 @@ export default function kiteFetch (req, init) {
 
                             if ( req.cache != 'no-store' ) {
                                 var cache = new Promise((resolve, reject) => {
-                                    if ( dev._kiteCache === undefined ) {
-                                        dev._kiteCache = new CacheControl(dev.flockUrl,
-                                                                          dev.appliance,
-                                                                          dev.personaId,
-                                                                          canonAppUrl)
-                                        resolve(dev._kiteCache)
+                                    if ( dev._intrustdCache === undefined ) {
+                                        dev._intrustdCache = new CacheControl(dev.flockUrl,
+                                                                              dev.appliance,
+                                                                              dev.personaId,
+                                                                              canonAppUrl)
+                                        resolve(dev._intrustdCache)
                                     } else
-                                        resolve(dev._kiteCache)
+                                        resolve(dev._intrustdCache)
                                 })
 
                                 cache.then((cache) => {
@@ -651,8 +651,8 @@ export default function kiteFetch (req, init) {
                          req.cache == 'reload' ) {
                         return runRequest(dev)
                     } else {
-                        if ( dev._kiteCache ) {
-                            return dev._kiteCache.matchRequest(req)
+                        if ( dev._intrustdCache ) {
+                            return dev._intrustdCache.matchRequest(req)
                                 .then((rsp) => {
                                     if ( rsp === undefined )
                                         return runRequest(dev)
@@ -670,15 +670,15 @@ export default function kiteFetch (req, init) {
         return oldFetch.apply(this, arguments);
 }
 
-kiteFetch.flockUrls = [
+ourFetch.flockUrls = [
     { url: "localhost:6855",
       secure: false,
       path: '/flock/' },
-    { url: "flock.flywithkite.com",
+    { url: "flock.intrustd.com",
       path: "/flock/",
       secure: true }
 ]
 
-kiteFetch.updatedApps = { }
-kiteFetch.requiredVersions = { }
-kiteFetch.loggedIn = false
+ourFetch.updatedApps = { }
+ourFetch.requiredVersions = { }
+ourFetch.loggedIn = false

@@ -1,25 +1,25 @@
-import kiteFetch from "./FetchApi.js"
+import ourFetch from "./FetchApi.js"
 import { EventTarget } from 'event-target-shim';
-import { parseKiteAppUrl, kiteAppCanonicalUrl } from "./Common.js";
-import { generateKiteBoundary, makeFormDataStream } from './FormData.js';
+import { parseAppUrl, appCanonicalUrl } from "./Common.js";
+import { generateFormBoundary, makeFormDataStream } from './FormData.js';
 
 var oldXMLHttpRequest = window.XMLHttpRequest
 
-export default class KiteXMLHttpRequest extends EventTarget {
+export default class OurXMLHttpRequest extends EventTarget {
     constructor (params) {
         super()
 
         this._xhr = new oldXMLHttpRequest(params)
         this._params = params
 
-        // This gets set to true if our request is a kite request
-        this._iskite = false
+        // This gets set to true if our request is an app request
+        this._isapp = false
     }
 
-    set onreadystatechange(hdl) { return this._setKiteHandler('readystatechange', hdl) }
-    get onreadystatechange() { return this._getKiteHandler('readystatechange') }
-    set ontimeout(hdl) { return this._setKiteHandler('timeout', hdl) }
-    get ontimeout() { return this._getKiteHandler('timeout') }
+    set onreadystatechange(hdl) { return this._setInternalHandler('readystatechange', hdl) }
+    get onreadystatechange() { return this._getInternalHandler('readystatechange') }
+    set ontimeout(hdl) { return this._setInternalHandler('timeout', hdl) }
+    get ontimeout() { return this._getInternalHandler('timeout') }
 
     addEventListener(evtNm, hdl) {
         this._xhr.addEventListener(evtNm, hdl)
@@ -31,7 +31,7 @@ export default class KiteXMLHttpRequest extends EventTarget {
         super.removeEventListener(evtNm, hdl)
     }
 
-    _setKiteHandler(evtNm, hdl) {
+    _setInternalHandler(evtNm, hdl) {
         var evtVarNm = '_on' + evtNm
         if ( this.hasOwnProperty(evtVarNm) ) {
             this.removeEventListener('readystatechange', this[evtVarNm])
@@ -45,30 +45,30 @@ export default class KiteXMLHttpRequest extends EventTarget {
         }
     }
 
-    _getKiteHandler(evtNm) {
+    _getInternalHandler(evtNm) {
         var evtVarNm = '_on' + evtNm
         return this[evtVarNm]
     }
 
-    _kiteProp(propName, kiteGetter) {
-        if ( this._iskite ) {
-            if ( kiteGetter === undefined )
+    _internalProp(propName, getter) {
+        if ( this._isapp ) {
+            if ( getter === undefined )
                 return this['_' + propName]
             else
-                return this[kiteGetter]()
+                return this[getter]()
         } else
             return this._xhr[propName]
     }
 
     // Read-only properties
-    get readyState() { return this._kiteProp("readyState") }
-    get response() { return this._kiteProp("response") }
-    get responseText() { return this._kiteProp("responseText") }
-    get responseURL() { return this._kiteProp("responseURL") }
-    get responseXML() { return this._kiteProp("responseXML") }
-    get status() { return this._kiteProp("status") }
-    get statusText() { return this._kiteProp("statusText") }
-    get upload() { return this._kiteProp("upload") }
+    get readyState() { return this._internalProp("readyState") }
+    get response() { return this._internalProp("response") }
+    get responseText() { return this._internalProp("responseText") }
+    get responseURL() { return this._internalProp("responseURL") }
+    get responseXML() { return this._internalProp("responseXML") }
+    get status() { return this._internalProp("status") }
+    get statusText() { return this._internalProp("statusText") }
+    get upload() { return this._internalProp("upload") }
 
     // Read-write properties
     get timeout() { return this._xhr.timeout }
@@ -82,36 +82,36 @@ export default class KiteXMLHttpRequest extends EventTarget {
 
     // Methods
 
-    _callKite(methodName, args) {
-        if ( this._iskite ) {
+    _callInternal(methodName, args) {
+        if ( this._isapp ) {
             return this['_' + methodName].apply(this, args)
         } else
             return this._xhr[methodName].apply(this._xhr, args)
     }
 
-    abort() { return this._callKite("abort", arguments) }
-    getAllResponseHeaders() { return this._callKite("getAllResponseHeaders", arguments) }
-    getResponseHeader() { return this._callKite("getResponseHeader", arguments) }
-    overrideMimeType() { return this._callKite("overrideMimeType", arguments) }
-    send() { return this._callKite("send", arguments) }
-    setRequestHeader() { return this._callKite("setRequestHeader", arguments) }
-    sendAsBinary() { return this._callKite("sendAsBinary", arguments) }
+    abort() { return this._callInternal("abort", arguments) }
+    getAllResponseHeaders() { return this._callInternal("getAllResponseHeaders", arguments) }
+    getResponseHeader() { return this._callInternal("getResponseHeader", arguments) }
+    overrideMimeType() { return this._callInternal("overrideMimeType", arguments) }
+    send() { return this._callInternal("send", arguments) }
+    setRequestHeader() { return this._callInternal("setRequestHeader", arguments) }
+    sendAsBinary() { return this._callInternal("sendAsBinary", arguments) }
 
     // The open function
     open(method, url, async, user, password) {
         // Check the url
-        var kiteUrl = parseKiteAppUrl(url)
+        var appUrl = parseAppUrl(url)
 
-        if ( kiteUrl.isKite ) {
-            if ( kiteUrl.error )
-                throw new TypeError(kiteUrl.error)
+        if ( appUrl.isApp ) {
+            if ( appUrl.error )
+                throw new TypeError(appUrl.error)
             else {
                 async = async === undefined ? true : async;
 
-                this._iskite = true
+                this._isapp = true
 
                 if ( !async )
-                    throw new TypeError("Cannot send synchronous kite requests")
+                    throw new TypeError("Cannot send synchronous intrustd requests")
 
                 this._method = method
                 this._url = url
@@ -127,7 +127,7 @@ export default class KiteXMLHttpRequest extends EventTarget {
             this._xhr.open.apply(this._xhr, arguments)
     }
 
-    // Kite-based implementations
+    // Intrustd-based implementations
     _sendAsBinary() {
         return this._send.apply(this, arguments)
     }
@@ -158,7 +158,7 @@ export default class KiteXMLHttpRequest extends EventTarget {
 
     _handleResponseError(err) {
         this._setReadyState(oldXMLHttpRequest.DONE)
-        console.error("Error while attempting kite XMLHttpRequest", err)
+        console.error("Error while attempting intrustd XMLHttpRequest", err)
         this.dispatchEvent(new ProgressEvent('error', {
                                lengthComputable: false,
                                loaded: 0,
@@ -208,7 +208,7 @@ export default class KiteXMLHttpRequest extends EventTarget {
         } else if ( body instanceof String || typeof body == 'string' ) {
             throw new TypeError("TODO String")
         } else if ( body instanceof FormData ) {
-            var boundary = generateKiteBoundary()
+            var boundary = generateFormBoundary()
             this.setRequestHeader("Content-Type", boundary.contentType)
 
             return makeFormDataStream(body, boundary.boundary)
@@ -222,7 +222,7 @@ export default class KiteXMLHttpRequest extends EventTarget {
     }
 
     _send(body) {
-        if ( this._iskite ) {
+        if ( this._isapp ) {
             var requestInit =
                 { method: this._method,
                   headers: this._headers }
@@ -237,13 +237,13 @@ export default class KiteXMLHttpRequest extends EventTarget {
 
             var timeout = this._makeTimeoutPromise().then(() => { return { type: 'timeout' } })
 
-            requestInit.kiteOnProgress = (e) => {
+            requestInit.intrustdOnProgress = (e) => {
                 console.log("Got progress event", e)
                 this.dispatchEvent(e)
             }
 
             console.log("Send XHR request", requestInit)
-            var fetchPromise = kiteFetch(this._url, requestInit)
+            var fetchPromise = ourFetch(this._url, requestInit)
                 .then((rsp) => { return { type: 'response', rsp: rsp } },
                       (err) => { return { type: 'error', err: err } })
 

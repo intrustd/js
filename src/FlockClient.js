@@ -53,9 +53,9 @@ class FlockNeedsPersonasEvent {
     }
 }
 
-class KiteChannelOpens {
+class ChannelOpens {
     constructor (flk) {
-        this.type = '-kite-channel-opens';
+        this.type = '-channel-opens';
         this.flock = flk;
     }
 }
@@ -433,7 +433,7 @@ export class FlockClient extends EventTarget {
                         this.rtc_control_channel.binaryType = 'arraybuffer'
                         this.rtc_control_channel.onopen = () => {
 			    this.signalRemoteComplete()
-                            this.dispatchEvent(new KiteChannelOpens(this));
+                            this.dispatchEvent(new ChannelOpens(this));
                             this.rtc_control_channel.close()
                             delete this.rtc_control_channel
                         }
@@ -530,7 +530,7 @@ export class FlockClient extends EventTarget {
     }
 
     parseVCardData(vcard) {
-        var exp_prefix = "KITE PERSONAS";
+        var exp_prefix = "INTRUSTD PERSONAS";
         if ( vcard.startsWith(exp_prefix) ) {
             vcard = vcard.slice(exp_prefix.length);
             var vcards = vcard.split("\nEND:VCARD");
@@ -538,9 +538,9 @@ export class FlockClient extends EventTarget {
             vcards = vcards.map((vc) => vCardParser.parse(vc))
 
             vcards = vcards.map((vc) => {
-                if ( vc.hasOwnProperty('X-KITEID') ) {
-                    var ret = { displayname: vc['X-KITEID'][0].value,
-                                id: vc['X-KITEID'][0].value };
+                if ( vc.hasOwnProperty('X-INTRUSTDID') ) {
+                    var ret = { displayname: vc['X-INTRUSTDID'][0].value,
+                                id: vc['X-INTRUSTDID'][0].value };
                     if ( vc.hasOwnProperty('fn') )
                         ret.displayname = vc['fn'][0].value;
                     return ret;
@@ -594,7 +594,7 @@ export class FlockClient extends EventTarget {
 
         return new Promise((resolve, reject) => {
             var removeEventListeners = () => {
-                this.removeEventListener('-kite-channel-opens', onOpen)
+                this.removeEventListener('-channel-opens', onOpen)
                 this.removeEventListener('error', onError)
             }
             var onOpen = () => {
@@ -606,7 +606,7 @@ export class FlockClient extends EventTarget {
                 removeEventListeners()
                 reject(e)
             }
-            this.addEventListener('-kite-channel-opens', onOpen)
+            this.addEventListener('-channel-opens', onOpen)
             this.addEventListener('error', onError)
         })
     }
@@ -710,136 +710,3 @@ export class FlockClient extends EventTarget {
 };
 
 window.FlockClient = FlockClient;
-
-// function FlockResponseEvent(response_buffer) {
-//     Event.call(this, "response");
-//     this.response = response_buffer;
-//     return this;
-// };
-
-// FlockResponseEvent.prototype = Event.prototype;
-
-// function FlockClient(websocket_endpoint) {
-//     EventTarget.call(this);
-
-//     // TODO catch connection errors
-//     this.websocket = new WebSocket(websocket_endpoint);
-//     this.websocket.binaryType = 'arraybuffer';
-
-//     this.websocket.addEventListener("open", this.socketOpens);
-//     this.websocket.addEventListener("message", this.socketReceives);
-
-//     return this;
-// };
-
-// FlockClient.prototype = Object.create(EventTarget.prototype, {
-//     socketOpens: function (event) {
-//         this.dispatchEvent(new Event("open"));
-//     },
-
-//     socketReceives: function (event) {
-//         this.dispatchEvent(new FlockResponseEvent(event.data));
-//     },
-
-//     sendRequest: function (request) {
-//         var buffer = request.write();
-//         this.websocket.send(buffer.toArrayBuffer(), { binary: true });
-//     }
-// });
-// FlockClient.prototype.constructor = FlockClient;
-
-// FlockClient.Commands = {
-//     RegisterDevice: 0x00000001,
-//     LoginToDevice:  0x00000002,
-//     CreateBridge:   0x00000003,
-
-//     StartLogin:     0xFFFFFFFE
-// };
-
-// FlockClient.ResponseCodes = {
-//     Success:        0x00000000,
-//     UnknownError:   0x00000001,
-//     DeviceAlreadyRegistered: 0x00000002,
-//     NoSuchDevice:   0x00000003
-// };
-
-// FlockClient.testFlock = function () {
-//     var flock = new FlockClient("ws://localhost:6854/");
-//     console.log("Testing flock");
-
-//     flock.addEventListener("open", function () {
-//         console.log("connection establised");
-//     });
-// };
-
-//     // ws.onopen = function () {
-//     //     console.log("Websocket open");
-
-//     //     var device_name = "This is a test";
-
-//     //     var message_buffer = new ArrayBuffer(4096);
-//     //     var message = new DataView(message_buffer);
-
-//     //     message.setUint32(0, FlockClient.Commands.LoginToDevice);
-//     //     message.setUint32(4, 1);
-//     //     message.setUint32(8, device_name.length);
-
-//     //     for ( var i = 0; i < device_name.length; i += 1 ) {
-//     //         message.setUint8(i + 12, device_name.charCodeAt(i));
-//     //     }
-
-//     //     ws.send(message_buffer, { binary: true });
-//     // };
-
-//     // ws.onmessage = function (evt) {
-//     //     console.log("Websocket message", evt.data);
-//     // };
-// //}
-
-// console.log("Beginning indexed db test");
-// var db = indexedDB.open("kite", 1)
-// db.onerror = (e) => {
-//     console.error("Could not open kite index", e);
-// }
-
-// db.onsuccess = (e) => {
-//     var database = db.result
-//     console.log("Opened indexed db", database)
-
-//     var tx = database.transaction(["cert"], "readonly")
-//     var certStore = tx.objectStore("cert")
-
-//     var hadCerts = false
-//     var onComplete = () => {
-//         if ( !hadCerts ) {
-//             console.log("No certs");
-
-//             RTCPeerConnection.generateCertificate({name: 'ECDSA', namedCurve: 'P-256'}).then((c) => {
-//                 console.log("Adding certificate", c, c.getFingerprints()[0])
-//                 var tx = database.transaction(["cert"], "readwrite")
-//                 var certStore = tx.objectStore("cert")
-//                 certStore.add({ 'flock': 'testflock', 'certificate': c}).onsuccess = () => {
-//                     console.log("Added certificate")
-//                 }
-//             })
-//         } else {
-//             console.log("We had certificates")
-//         }
-//     }
-//     certStore.openCursor().onsuccess = (e) => {
-//         var cursor = e.target.result
-//         if ( cursor ) {
-//             hadCerts = true
-//             console.log("Certificate", cursor.value, cursor.value.certificate.getFingerprints()[0])
-//             cursor.continue()
-//         } else
-//             onComplete()
-//     }
-// }
-
-// db.onupgradeneeded = (e) => {
-//     var db = e.target.result;
-//     console.log("Launching upgrade from", e.oldVersion, "to", e.newVersion)
-
-//     db.createObjectStore("cert", {keyPath: "flock"})
-// }

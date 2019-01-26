@@ -2,7 +2,7 @@ import { EventTarget } from 'event-target-shim';
 import queryString from 'query-string';
 
 export function lookupWellKnownFlock() {
-    return fetch("/.well-known/kite-flock")
+    return fetch("/.well-known/intrustd-flock")
         .then((r) => {
             if ( r.status == 200 ) {
                 return r.text()

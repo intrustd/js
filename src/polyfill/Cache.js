@@ -1,9 +1,8 @@
 import { Record, Map, Set } from 'immutable';
 
-import { parseKiteAppUrl } from './Common.js';
+import { parseAppUrl } from './Common.js';
 
 import cachePolyfill from 'cache-polyfill/src/cache-storage.js';
-console.log("CAche Polyfill", cachePolyfill)
 
 const CacheKey = Record({ method: '', url: '' })
 
@@ -210,16 +209,16 @@ function parseCacheControl(ctl) {
     return ret
 }
 
-class KiteCacheAdaptor {
+class CacheAdaptor {
     constructor(cache, domain) {
         this.domain = domain
         this.underlying = cache
     }
 
-    rewriteKiteRequest(request) {
-        var url = parseKiteAppUrl(request.url)
+    rewriteRequest(request) {
+        var url = parseAppUrl(request.url)
 
-        if ( url.isKite ) {
+        if ( url.isApp ) {
             var url = `http://${this.domain}${url.path}`
             var requestInit = {
                 method: request.method,
@@ -239,7 +238,7 @@ class KiteCacheAdaptor {
     }
 
     match(request) {
-        request = this.rewriteKiteRequest(request)
+        request = this.rewriteRequest(request)
 
         return this.underlying.match(request)
     }
@@ -250,7 +249,7 @@ class KiteCacheAdaptor {
         var responseInit = Object.assign({}, response)
         delete responseInit.bodyBlob
         var response = new Response(bodyBlob, responseInit)
-        request = this.rewriteKiteRequest(request)
+        request = this.rewriteRequest(request)
 
         return this.underlying.put(request, response)
     }
@@ -266,9 +265,9 @@ export class CacheControl {
         this.cacheName = this.makeCanonicalName()
 
         if ( window.caches ) {
-            this.publicCache = window.caches.open(this.cacheName).then((cache) => new KiteCacheAdaptor(cache, appId))
+            this.publicCache = window.caches.open(this.cacheName).then((cache) => new CacheAdaptor(cache, appId))
         } else {
-            this.publicCache = cachePolyfill.caches.open(this.cacheName).then((cache) => new KiteCacheAdaptor(cache, appId))
+            this.publicCache = cachePolyfill.caches.open(this.cacheName).then((cache) => new CacheAdaptor(cache, appId))
         }
         this.privateCache = Promise.resolve(new PrivateCache())
     }

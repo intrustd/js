@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { parseKiteAppUrl } from './polyfill/Common.js';
+import { parseAppUrl } from './polyfill/Common.js';
 import { resetLogins } from './Logins.js';
 
 import './react.scss';
@@ -11,16 +11,16 @@ function getXhrImage(xhr, opts) {
 
 const E = React.createElement;
 
-export class KiteLoadingIndicator extends React.Component {
+export class LoadingIndicator extends React.Component {
     render() {
-        return E('span', { className: 'kite-connecting' },
-                 E('i', { className: 'kite-connecting-dot' }),
-                 E('i', { className: 'kite-connecting-dot' }),
-                 E('i', { className: 'kite-connecting-dot' }))
+        return E('span', { className: 'intrustd-connecting' },
+                 E('i', { className: 'intrustd-connecting-dot' }),
+                 E('i', { className: 'intrustd-connecting-dot' }),
+                 E('i', { className: 'intrustd-connecting-dot' }))
     }
 }
 
-export class KiteUploadButton extends React.Component {
+export class UploadButton extends React.Component {
     constructor() {
         super()
         this.upload = React.createRef();
@@ -32,7 +32,7 @@ export class KiteUploadButton extends React.Component {
 
     doUpload() {
         if ( !this.props.hasOwnProperty('onUpload') )
-            console.error("<KiteUploadButton> expects 'onUpload={...}' property")
+            console.error("<UploadButton> expects 'onUpload={...}' property")
         else
             this.props.onUpload(this.upload.current.files)
     }
@@ -52,7 +52,7 @@ export class KiteUploadButton extends React.Component {
     }
 }
 
-export class KiteImage extends React.Component {
+export class Image extends React.Component {
     constructor() {
         super()
         this.state = {
@@ -94,19 +94,8 @@ export class KiteImage extends React.Component {
         this.freeBlob()
 
         this.setState({srcUrl: null, isBlob: false})
-        var parsed = parseKiteAppUrl(newSrc)
-        fetch(newSrc, { method: 'GET',
-//                        kiteOnPartialLoad: (e) => {
-//                            var req = e.request
-//                            var newBlob =  URL.createObjectURL(req.currentBody)
-//                            this.freeBlob()
-//
-//                            console.log("New blob for ", this.props.src, " ", newBlob)
-//                            this.setState({ srcUrl: newBlob,
-//                                            isBlob: true })
-//                            this.dispatchFirstLoad()
-//                        }
-                      })
+        var parsed = parseAppUrl(newSrc)
+        fetch(newSrc, { method: 'GET'})
             .then((d) => d.blob().then((b) => {
                 return {contentType: d.headers.get('content-type'),
                         blob: b}
@@ -133,7 +122,7 @@ export class KiteImage extends React.Component {
     }
 }
 
-export class KiteForm extends React.Component {
+export class Form extends React.Component {
     constructor () {
         super()
         this.formRef = React.createRef()
@@ -147,16 +136,16 @@ export class KiteForm extends React.Component {
         return new FormData(this.formRef.current)
     }
 
-    get isKite () {
+    get isApp () {
         var url = this.props.action
         return url &&
-            parseKiteAppUrl(url).isKite;
+            parseAppUrl(url).isApp;
     }
 
     render() {
         var props = Object.assign({}, this.props)
         var url = props.action
-        if ( this.isKite ) {
+        if ( this.isApp ) {
             props = Object.assign({}, props)
             props.action = "javascript:void(0)"
             props.onSubmit = (e) => { this.onFormSubmit(e) }
@@ -169,7 +158,7 @@ export class KiteForm extends React.Component {
     }
 }
 
-export class KitePersonaButton extends React.Component {
+export class PersonaButton extends React.Component {
     constructor () {
         super()
 
@@ -177,7 +166,7 @@ export class KitePersonaButton extends React.Component {
     }
 
     componentDidMount() {
-        fetch("kite+app://admin.flywithkite.com/me",
+        fetch("intrustd+app://admin.intrustd.com/me",
               { method: 'GET', cache: 'no-store' })
             .then((r) => r.json())
             .then((r) => this.setState({ ourInfo: r }))
@@ -203,76 +192,22 @@ export class KitePersonaButton extends React.Component {
                 else
                     personaInfo = persona_id
 
-                return E('li', {className: 'kite-persona-button'},
-                         E('div', { className: 'kite-persona-name' }, personaInfo),
+                return E('li', {className: 'intrustd-persona-button'},
+                         E('div', { className: 'intrustd-persona-name' }, personaInfo),
                          E('div', {className: 'uk-navbar-dropdown'},
                            E('ul', {className: 'uk-nav uk-navbar-dropdown-nav'},
                              E('li', null,
-                               E('dl', {className: 'kite-persona-info'},
-                                 E('dt', {className: 'kite-persona-info-item--appliance'}, 'Appliance'),
+                               E('dl', {className: 'intrustd-persona-info'},
+                                 E('dt', {className: 'intrustd-persona-info-item--appliance'}, 'Appliance'),
                                  E('dd', null, 'Test'),
-                                 E('dt', {className: 'kite-persona-info-item--days-left'}, 'Time left'),
+                                 E('dt', {className: 'intrustd-persona-info-item--days-left'}, 'Time left'),
                                  E('dd', null, 'Test'))),
                              E('li', null,
                                E('a', { 'href': '#', onClick: this.doLogout.bind(this) }, 'Log out')))));
             }
         } else {
-            return E('li', {className: 'kite-persona-button kite-persona-button--loading'},
+            return E('li', {className: 'intrustd-persona-button intrustd-persona-button--loading'},
                      E('i', {className: 'fa fa-spin fa-fw fa-2x fa-circle-o-notch'}));
         }
     }
 }
-
-//    var url = null;
-//    var srcUrl = null;
-//    var curBlob = null;
-//
-//    var updateUrl = (newUrl) => {
-//        url = newUrl;
-//        var parsed = parseKiteAppUrl(url);
-//        if ( parsed.isKite ) {
-//            srcUrl = "about:blank";
-//            console.error("TODO kite images")
-//        } else {
-//            srcUrl = "about:blank";
-//            m.request({
-//                method: 'GET',
-//                url: url,
-//                config: (xhr) => { xhr.responseType = 'blob'; return xhr; },
-//                extract: (xhr) => {
-//                    return { contentType: xhr.getResponseHeader('content-type'),
-//                             body: xhr.response }
-//                },
-//                deserialize: (d) => { return d; }
-//            }).then(({contentType, body}) => {
-//                curBlob = URL.createObjectURL(body)
-//                srcUrl = curBlob;
-//                console.log("Got blob", srcUrl)
-//            })
-//            m.redraw()
-//        }
-//    }
-//
-//    return {
-//        oncreate: (vnode) => {
-//            updateUrl(vnode.attrs.src);
-//        },
-//
-//        onbeforeupdate: (vnode) => {
-//            console.log("before update", vnode);
-//            return true;
-//        },
-//
-//        view: (vnode) => {
-//            console.log("view called", srcUrl)
-//            var attrs = Object.assign({}, vnode.attrs)
-//            attrs.src = srcUrl;
-//            delete attrs.cls;
-//
-//            if ( srcUrl )
-//                return m("img" + (vnode.attrs.cls || ""), attrs)
-//            else
-//                return "Loading"
-//        }
-//    }
-//}
