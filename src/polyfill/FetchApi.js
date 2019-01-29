@@ -675,7 +675,7 @@ ourFetch.flockUrls = [
       secure: false,
       path: '/flock/' },
     { url: "flock.intrustd.com",
-      path: "/flock/",
+      path: "/",
       secure: true }
 ]
 
