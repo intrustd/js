@@ -26,7 +26,7 @@ export class PermissionsError {
     }
 }
 
-function wrtcToIntrustdFingerprint({ algorithm, value }) {
+function wrtcToFingerprint({ algorithm, value }) {
     const AlgMapping = { 'sha-256': 'SHA256' }
 
     if ( AlgMapping.hasOwnProperty(algorithm) ) {
