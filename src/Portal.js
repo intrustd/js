@@ -443,7 +443,7 @@ class PermissionsModal extends React.Component {
             body = E(LoadingIndicator, { key: 'loading-preview' })
             break;
         case PortalServerState.AskForConfirmation:
-            if ( this.props.tokenPreview ) {
+            if ( this.props.tokenPreview && this.props.tokenPreview.error === undefined ) {
                 body = [ E('p', { className: 'intrustd-auth-explainer' },
                            `The page at ${this.props.origin} is asking for permission to access your Intrustd device`),
                          this.renderPermissionsList(),
@@ -458,8 +458,8 @@ class PermissionsModal extends React.Component {
                              'Accept')) ]
             } else {
                 var error = 'Error fetching permissions preview';
-                if ( this.tokenPreview !== undefined && typeof this.tokenPreview.error == 'string' ) {
-                    error = this.tokenPreview.error
+                if ( this.props.tokenPreview !== undefined && typeof this.props.tokenPreview.error == 'string' ) {
+                    error = this.props.tokenPreview.error
                 }
                 body = [ E('p', null, error) ]
             }
@@ -677,16 +677,30 @@ export class PortalServer {
                                                          this.request.siteFingerprints)),
                 appClient: this.flockClient })
             .then((r) => {
-                this.state = PortalServerState.AskForConfirmation
-                if ( r.status == 200 ) {
-                    return r.json().then((preview) => {
-                        this.tokenPreview = preview
-                        this.showDisplay()
-                    })
-                } else {
+                var badStatus = () => {
+                    this.state = PortalServerState.AskForConfirmation
                     this.tokenPreview = { error: `Invalid status: ${r.status}` }
                     this.showDisplay()
                 }
+                if ( r.status == 200 ) {
+                    return r.json().then((preview) => {
+                        this.state = PortalServerState.AskForConfirmation
+                        this.tokenPreview = preview
+                        this.showDisplay()
+                    }, (e) => {
+                        this.state = PortalServerState.AskForConfirmation
+                        this.tokenPreview = { error: `Failed to parse response: ${e}` }
+                        this.showDisplay()
+                    })
+                } else if ( r.status == 400 ) {
+                    r.json().then((e) => {
+                        if ( e['missing-apps'] ){
+                            this.onMissingApps(e['missing-apps'])
+                        } else
+                            badStatus()
+                    })
+                } else
+                    badStatus()
             })
             .catch((e) => {
                 this.state = PortalServerState.AskForConfirmation
@@ -697,7 +711,7 @@ export class PortalServer {
 
     onSuccess(flockClient) {
         this.flockClient = flockClient
-        this.state = PortalServerState.AskForConfirmation
+        this.state = PortalServerState.MintingToken
 
         // Request the nuclear permission for this computer
 
@@ -714,8 +728,16 @@ export class PortalServer {
                                   exp: nuclearToken.expiration }
                 var login = new Login(loginData, site)
                 login.save()
+                return nuclearToken
             })
-            .then(() => this.updateModal())
+            .then((token) => {
+                this.updateModal()
+                this.respond({ success: true,
+                               persona: this.flockClient.personaId,
+                               flockUrl: this.flockClient.flockUrl,
+                               applianceName: this.flockClient.appliance,
+                               exp: token.expiration, token: token.token })
+            })
     }
 
     mkTokenRequest(perms, ttl, site) {
@@ -779,6 +801,12 @@ export class PortalServer {
                  ...this.request.permissions ]
     }
 
+    onMissingApps(missing) {
+        this.state = PortalServerState.InstallAppsRequest
+        this.missingApps = missing
+        this.updateModal()
+    }
+
     onAccept(shouldRememberPermissions) {
         // Attempt to make a token using this site ID
         var permissions = this.allRequestedPermissions
@@ -801,8 +829,7 @@ export class PortalServer {
                 })
             }).catch((e) => {
                 if ( e instanceof MissingApps) {
-                    this.state = PortalServerState.InstallAppsRequest
-                    this.missingApps = e.missingApps
+                    this.onMissingApps(e.missingApps)
                 } else if ( e instanceof PermissionsError ) {
                     this.state = PortalServerState.Error
                     this.error = `${e.message}`
