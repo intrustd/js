@@ -195,9 +195,11 @@ export class PortalAuthenticator extends EventTarget('open', 'error') {
         this.render()
 
         Promise.all([findPortalApp(flocks, oldFetch),
-                     getLoginsDb().then(getSite),
-                     getLoginsDb().then(lookupLogins)])
-            .then(([{flock, portalUrl}, site, logins]) => {
+                     getLoginsDb().then(
+                         (db) => getSite(db).then(
+                             (site) => lookupLogins(db).then(
+                                 (logins) => { return { db, site, logins } }))) ])
+            .then(([{flock, portalUrl}, {db, site, logins}]) => {
                 var url = new URL(portalUrl)
 
                 this.chosenFlock = flock
@@ -866,6 +868,8 @@ export class PortalServer {
     updateModal() {
         if ( !this.modalShown )
             this.showModal()
+
+        console.log("Update modal", this)
 
         switch ( this.state ) {
         case PortalServerState.NewLogin:

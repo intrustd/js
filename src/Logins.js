@@ -117,7 +117,7 @@ export function getLoginsDb() {
                 logins: 'persona_id, [flock+appliance]'
             })
 
-            resolve(db.open())
+            db.open().then(resolve, reject)
         })
 
     return loginsDb
@@ -128,10 +128,11 @@ export function getSite(db) {
     return db.site.where('exp').above(now).toArray()
         .then((sites) => {
             if ( sites.length == 0 ) {
+                console.log("Looked for certs with expration above ", now)
                 return Promise.all(
                     [RTCPeerConnection.generateCertificate({ name: 'ECDSA', namedCurve: 'P-256' }),
                      db.site.where('exp').belowOrEqual(now).delete()])
-                    .then(([cert, done]) => db.site.add({exp: cert.expires, cert}).then(() => cert))
+                    .then(([cert, done]) => { console.log("Added cert ", cert, done); return db.site.add({exp: cert.expires, cert}).then(() => cert) })
             } else {
                 return sites[0].cert
             }
