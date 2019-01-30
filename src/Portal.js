@@ -921,7 +921,7 @@ export class PortalServer {
                                                   permissions: this.request.permissions,
                                                   onResetLogins: this.onResetLogins.bind(this),
                                                   onSuccess: this.onAccept.bind(this),
-                                                  onRetryAfterInstall: this.onAccept.bind(this),
+                                                  onRetryAfterInstall: this.makePreview.bind(this),
                                                   onChooseLogin: this.selectLogin.bind(this),
                                                   cancelConnection: this.cancelConnection.bind(this)
                                                 }),
