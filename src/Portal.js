@@ -728,15 +728,8 @@ export class PortalServer {
                                   exp: nuclearToken.expiration }
                 var login = new Login(loginData, site)
                 login.save()
-                return nuclearToken
-            })
-            .then((token) => {
-                this.updateModal()
-                this.respond({ success: true,
-                               persona: this.flockClient.personaId,
-                               flockUrl: this.flockClient.flockUrl,
-                               applianceName: this.flockClient.appliance,
-                               exp: token.expiration, token: token.token })
+
+                this.makePreview()
             })
     }
 
