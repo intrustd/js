@@ -182,12 +182,17 @@ export class FlockSocket extends EventTarget {
         if ( this.state == 'connected' ) {
             var buffer;
             data = this._normalizeData(data)
-            if ( !(data instanceof ArrayBuffer) ) {
+            if ( !(data instanceof ArrayBuffer) &&
+                 !(data instanceof DataView) ) {
                 throw new TypeError("data should be an ArrayBuffer or a string");
             }
 
             var buffer = new ArrayBuffer(Math.min(data.byteLength + DATA_HDR_SZ, SOCKET_MAX_MTU))
-            var old_array = new Uint8Array(data)
+            var old_array
+            if ( data instanceof DataView )
+                old_array = new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+            else
+                old_array = new Uint8Array(data)
             var new_array = new Uint8Array(buffer)
 
             var dv = new DataView(buffer);
@@ -215,6 +220,20 @@ export class FlockSocket extends EventTarget {
     close() {
         this.data_chan.close()
         delete this.data_chan
+    }
+
+    waitForWrite(lowThreshold) {
+        if ( lowThreshold === undefined )
+            lowThreshold = 0
+
+        return new Promise((resolve, reject) => {
+            this.data_chan.bufferedAmountLowThreshold = lowThreshold
+            this.data_chan.onbufferedamountlow = () => {
+                this.data_chan.bufferedAmountLowThreshold = null
+                this.data_chan.onbufferedamountlow = null
+                resolve()
+            }
+        })
     }
 
     // Returns a promise of when the stream is sent

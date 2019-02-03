@@ -3,9 +3,7 @@ import { EventTarget } from 'event-target-shim';
 import { HTTPParser } from 'http-parser-js';
 import { FlockClient } from "../FlockClient.js";
 import { Authenticator, attemptLogin } from "../Authenticator.js";
-import { PortalAuthenticator } from "../Portal.js";
-import { PermalinkAuthenticator, isPermalink } from "../Permalink.js";
-import { parseAppUrl, appCanonicalUrl } from "./Common.js";
+import { parseAppUrl, appCanonicalUrl, getClientPromise } from "./Common.js";
 import { generateFormBoundary, makeFormDataStream } from "./FormData.js";
 import { BlobReader } from "./Streams.js";
 import { CacheControl } from "./Cache.js";
@@ -243,6 +241,7 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
             headers.append('Cache-Control', 'no-cache')
             headers.append('Pragma', 'no-cache')
             headers.append('User-Agent', navigator.userAgent)
+            headers.append('Origin', location.origin)
 
             var stsLine = this.request.method + ' ' + this.url.path + ' HTTP/1.1\r\n';
             var bodyLengthCalculated = Promise.resolve()
@@ -383,98 +382,6 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
     }
 }
 
-var globalClient;
-
-function chooseNewAppliance(flocks, site) {
-    if ( ourFetch.require_login ) {
-        return new Promise((resolve, reject) => {
-            var chooser = new Authenticator(flocks, site)
-            chooser.addEventListener('error', (e) => {
-                globalClient = undefined;
-                reject(e);
-            });
-
-            chooser.addEventListener('open', (e) => {
-                // TODO request permissions from admin app
-                resolve(e.device)
-            });
-        })
-    } else {
-        // The best way to log in is to use the flock recommended
-        // portal app. Ask the flock which application is best
-
-        var mkAuth
-
-        if ( isPermalink() ) {
-            mkAuth = () => { return new PermalinkAuthenticator() }
-        } else {
-            mkAuth = () => { return new PortalAuthenticator(flocks, site, oldFetch, ourFetch.permissions) }
-        }
-
-        return new Promise((resolve, reject) => {
-            var chooser = mkAuth()
-
-            chooser.addEventListener('error', (e) => {
-                globalClient = undefined;
-                reject(e);
-            })
-
-            chooser.addEventListener('open', (e) => {
-                resolve(e.device)
-            })
-        })
-    }
-}
-
-function getGlobalClient(flocks) {
-    if ( globalClient === undefined ) {
-        globalClient = chooseNewAppliance(flocks)
-    }
-    return globalClient;
-}
-
-function isVersionOlder(a, b) {
-    var va = a.split('.')
-    var vb = b.split('.')
-
-    if ( va.length != vb.length ) return false
-
-    for ( var i = 0; i < va.length; ++i ) {
-        if ( va[i] < vb[i] ) return true
-        else if ( va[i] > vb[i] ) return false
-    }
-
-    return false
-}
-
-function updateApp(client, canonAppUrl) {
-    if ( ourFetch.updatedApps[canonAppUrl] === undefined ) {
-        if ( ourFetch.requiredVersions[canonAppUrl] === undefined )
-            ourFetch.updatedApps[canonAppUrl] = Promise.resolve()
-        else {
-            ourFetch.updatedApps[canonAppUrl] = ourFetch(`intrustd+app://admin.intrustd.com/me/applications/${canonAppUrl}/manifest/current`)
-                .then((r) => {
-                    if ( r.status == 200 ) {
-                    return r.json()
-                            .then(({version}) => {
-                                if ( isVersionOlder(version, ourFetch.requiredVersions[canonAppUrl]) ) {
-                                    // Do Update
-                                    return doUpdate(ourFetch, client, canonAppUrl)
-                                } else
-                                    return
-                            })
-                    } else {
-                        console.log("Got", r.status, "while requesting version of", canonAppUrl)
-                        // TODO raise notification
-                        return
-                    }
-                })
-        }
-    }
-
-    return ourFetch.updatedApps[canonAppUrl]
-}
-
 export default function ourFetch (req, init) {
     var url = req;
     if ( req instanceof Request ) {
@@ -486,7 +393,6 @@ export default function ourFetch (req, init) {
         if ( appUrl.hasOwnProperty('error') )
             throw new TypeError(appUrl.error)
         else {
-            var flockUrls = ourFetch.flockUrls;
             var canonAppUrl = appUrl.app;
             var clientPromise, clonedReq
 
@@ -518,17 +424,7 @@ export default function ourFetch (req, init) {
                 return oldFetch.apply(this, [ req ])
             }
 
-            if ( init.hasOwnProperty('appClient') )
-                clientPromise = Promise.resolve(init['appClient'])
-            else
-                clientPromise = getGlobalClient(flockUrls)
-
-            if ( ourFetch.autoUpdate ) {
-                clientPromise =
-                    clientPromise.then((client) => {
-                        return updateApp(client, canonAppUrl).then(() => client)
-                    })
-            }
+            clientPromise = getClientPromise(init)
 
             var runRequest = (dev) => {
                 var tracker = ProgressManager.startFetch()

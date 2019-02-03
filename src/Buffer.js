@@ -88,6 +88,16 @@ export class DynamicArrayBuffer {
         return this;
     }
 
+    putBuffer(s, le) {
+        if ( !(s instanceof ArrayBuffer ) )
+            throw new TypeError("putBuffer: the argument must be an ArrayBuffer")
+
+        var d = new Uint8Array(s)
+
+        for ( var i = 0; i < d.length; i++ )
+            this.putUint8(d[i])
+    }
+
     putList(a, cb) {
         this.putUint32(a.length);
         for ( var i = 0; i < a.length; ++i )

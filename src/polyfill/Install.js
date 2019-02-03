@@ -1,4 +1,5 @@
 import ourFetch from './FetchApi.js'
+import ourWebSocket from './WebSocket.js'
 import ourXMLHttpRequest from './XhrApi.js'
 
 export default function install(options) {
@@ -57,8 +58,26 @@ export default function install(options) {
     else
         ourFetch.loginHook = function () { }
 
+    if ( options.intrustdByDefault !== undefined &&
+         options.intrustdByDefault ) {
+        if (options.customBase === undefined ||
+            options.customBase == `intrustd+app://${ourFetch.appName}` ) {
+             ourFetch.customBase = `intrustd+app://${ourFetch.appName}`
+         } else
+             throw new TypeError("Only one of intrustdByDefault or customBase should be specified")
+    } else if ( options.customBase !== undefined ) {
+        ourFetch.customBase = options.customBase
+    } else
+        ourFetch.customBase = null
+
+    if ( options.captureWebSocketsFor !== undefined )
+        ourWebSocket.captureWebSocketsFor = options.captureWebSocketsFor
+    else
+        ourWebSocket.captureWebSocketsFor = []
+
     window.XMLHttpRequest = ourXMLHttpRequest
     window.fetch = ourFetch
+    window.WebSocket = ourWebSocket
 }
 
 window.installIntrustd = install
