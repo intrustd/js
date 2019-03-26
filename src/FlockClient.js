@@ -373,6 +373,9 @@ export class FlockClient extends EventTarget {
             this.state = FlockClientState.Connecting;
         }
 
+        if ( options.hasOwnProperty('site') )
+            this.certificate = options.site
+
         this.personas = [];
         this.applications = {};
         this.rtc_stream_number = 0;
@@ -444,7 +447,10 @@ export class FlockClient extends EventTarget {
                             this.signalRemoteComplete()
                         }
 
-                        this.rtc_connection = new RTCPeerConnection({ iceServers: iceServers });
+                        this.rtc_connection = new RTCPeerConnection(
+                            Object.assign({ iceServers: iceServers },
+                                          this.certificate !== undefined ? { certificates: [ this.certificate ] } : {})
+                        );
                         this.rtc_connection.addEventListener('icecandidate', (c) => {
                             this.addIceCandidate(c)
                         })
@@ -513,8 +519,6 @@ export class FlockClient extends EventTarget {
 
     // Called when the remote description is set and we need to send the answer
     onSetDescription() {
-        console.log("Set remote description");
-
         this.rtc_connection.createAnswer()
             .then((answer) => {
                 this.rtc_connection.setLocalDescription(answer)

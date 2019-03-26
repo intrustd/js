@@ -17,6 +17,21 @@ export function makeAbsoluteUrl(url) {
     return `${a.href}`;
 }
 
+export function addTokens(tokens, options) {
+    return fetch('intrustd+app://admin.intrustd.com/me/tokens',
+                 Object.assign({ data: JSON.stringify(tokens),
+                                 headers: { 'Content-type': 'application/json' },
+                                 method: 'POST' }, options))
+        .then((r) => {
+            if ( r.status != 200 )
+                r.json().then((details) => {
+                    throw new PermissionsError(`Invalid status: ${r.status}: ${JSON.stringify(details)}`)
+                }, () => {
+                    throw new PermissionsError(`Invalid status: ${r.status}`)
+                })
+        })
+}
+
 export function mintToken(perms, options) {
     var defaults = { format: 'raw', ttl: null, siteOnly: false }
 
@@ -73,6 +88,11 @@ export function mintToken(perms, options) {
                 fields.push(`token=${token}`)
 
                 return `?${fields.join('&')}`
+            } else if ( options.format == 'json' ) {
+                var ret = { token, appliance: r.intrustd.appliance }
+                if ( options.requiresPersona )
+                    ret['persona'] = r.intrustd.persona
+                return ret
             } else
                 return token
         })

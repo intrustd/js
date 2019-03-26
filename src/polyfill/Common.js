@@ -148,7 +148,7 @@ function updateApp(client, canonAppUrl) {
     return ourFetch.updatedApps[canonAppUrl]
 }
 
-export function getClientPromise(init) {
+export function getClientPromise(init, canonAppUrl) {
     if ( init === undefined )
         init = {}
 
@@ -168,4 +168,49 @@ export function getClientPromise(init) {
     }
 
     return clientPromise
+}
+
+export function parseCacheControl(headers) {
+    var control = headers.get('cache-control')
+    if ( control !== null )
+        control = control.split(',')
+    else
+        control = []
+
+    var ret = { noStore: false, noCache: false, noTransform: false,
+                public: false, private: false, mustRevalidate: false,
+                proxyRevalidate: false, immutable: false }
+
+    control.map((c) => {
+        var matches
+
+        if ( c == 'no-store' )
+            ret.noStore = true
+        else if ( c == 'no-cache' )
+            ret.noCache = true
+        else if ( c == 'no-transform' )
+            ret.noTransform = true
+        else if ( c == 'public' )
+            ret.public = true
+        else if ( c == 'private' )
+            ret.private = true
+        else if ( c == 'must-revalidate' )
+            ret.mustRevalidate = true
+        else if ( c == 'proxy-revalidate' )
+            ret.proxyRevalidate = true
+        else if ( c == 'immutable' )
+            ret.immutable = true
+        else if ( matches = c.match(/max-age=([0-9]+)/i) )
+            ret.maxAge = parseInt(matches[1])
+        else if ( matches = c.match(/s-maxage=([0-9]+)/i) )
+            ret.sMaxAge = parseInt(matches[1])
+        else if ( matches = c.match(/stale-while-revalidate=([0-9]+)/i) )
+            ret.staleWhileRevalidate = parseInt(matches[1])
+        else if ( matches = c.match(/stale-if-error=([0-9]+)/i) )
+            ret.staleIfError = parseInt(matches[1])
+        else
+            console.warning("Unrecognized cache-control directive", c)
+    })
+
+    return ret
 }

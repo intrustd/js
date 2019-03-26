@@ -816,7 +816,7 @@ export default function WebSocket(url, protocols, options) {
     }
 
     if ( urlData.isApp ) {
-        var clientPromise = getClientPromise(options)
+        var clientPromise = getClientPromise(options, urlData.app)
         var socketPromise =
             clientPromise.then((client) =>
                                client.requestApps([ urlData.app ]).then(() => client))

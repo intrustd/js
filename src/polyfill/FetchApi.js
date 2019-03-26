@@ -3,7 +3,7 @@ import { EventTarget } from 'event-target-shim';
 import { HTTPParser } from 'http-parser-js';
 import { FlockClient } from "../FlockClient.js";
 import { Authenticator, attemptLogin } from "../Authenticator.js";
-import { parseAppUrl, appCanonicalUrl, getClientPromise } from "./Common.js";
+import { parseAppUrl, appCanonicalUrl, getClientPromise, parseCacheControl } from "./Common.js";
 import { generateFormBoundary, makeFormDataStream } from "./FormData.js";
 import { BlobReader } from "./Streams.js";
 import { CacheControl } from "./Cache.js";
@@ -424,7 +424,7 @@ export default function ourFetch (req, init) {
                 return oldFetch.apply(this, [ req ])
             }
 
-            clientPromise = getClientPromise(init)
+            clientPromise = getClientPromise(init, canonAppUrl)
 
             var runRequest = (dev) => {
                 var tracker = ProgressManager.startFetch()
@@ -505,7 +505,10 @@ export default function ourFetch (req, init) {
                                 }
                             }
 
-                            if ( req.cache != 'no-store' ) {
+                            var cacheControl = parseCacheControl(resp.response.headers)
+
+                            if ( req.method == 'GET' &&
+                                 (req.cache != 'no-store' && !cacheControl.noStore) ) {
                                 var cache = new Promise((resolve, reject) => {
                                     if ( dev._intrustdCache === undefined ) {
                                         dev._intrustdCache = new CacheControl(dev.flockUrl,
@@ -531,6 +534,7 @@ export default function ourFetch (req, init) {
                                         .catch(() => { tracker.done() })
                                 }).catch((e) => { console.error("Error while caching", e) })
                             } else {
+                                // TODO if method is not GET, invalidate all entries
                                 tracker.done()
                                 resolve(resp.response)
                             }
@@ -547,7 +551,8 @@ export default function ourFetch (req, init) {
                          req.cache == 'reload' ) {
                         return runRequest(dev)
                     } else {
-                        if ( dev._intrustdCache ) {
+                        if ( dev._intrustdCache &&
+                             req.method == 'GET' ) {
                             return dev._intrustdCache.matchRequest(req)
                                 .then((rsp) => {
                                     if ( rsp === undefined )

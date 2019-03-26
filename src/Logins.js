@@ -37,7 +37,8 @@ export class Login {
     createClient() {
         return new Promise((resolve, reject) => {
             var client = new FlockClient({ url: this.flockUrl,
-                                           appliance: this.applianceName })
+                                           appliance: this.applianceName,
+                                           site: this.siteCertificate })
             client.addEventListener('error', (e) => { console.error(e); reject(e); })
             client.addEventListener('needs-personas', () => {
                 var persona = this.personaId
