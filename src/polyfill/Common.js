@@ -1,5 +1,6 @@
 import { PortalAuthenticator } from "../Portal.js";
 import { PermalinkAuthenticator, isPermalink } from "../Permalink.js";
+import { doUpdate } from './Updates.js';
 
 import ourFetch from './FetchApi.js';
 
