@@ -215,3 +215,26 @@ export function parseCacheControl(headers) {
 
     return ret
 }
+
+const fpRe = /a=fingerprint:(.+) (.+)/;
+
+export function getCertificateFingerprints(cert) {
+    if ( cert.getFingerprints ) {
+        console.log("Using get fingerrints")
+        return Promise.resolve(cert.getFingerprints())
+    } else if ( cert.fingerprints ) {
+        return Promise.resolve(cert.fingerprints)
+    } else {
+        var conn = new RTCPeerConnection({iceServers: [], certificates: [ cert ]})
+        conn.createDataChannel('control', {protocol: 'control'})
+        return conn.createOffer().then((off) => {
+            console.log("Got offer", off.sdp)
+            var match = off.sdp.match(fpRe)
+            if ( match ) {
+                return [ { algorithm: match[1],
+                           value: match[2] } ]
+            } else
+                throw new SyntaxError("No fingerprint found")
+        })
+    }
+}

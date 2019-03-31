@@ -353,6 +353,9 @@ const FlockClientState = {
 
 const iceServers = [ { urls: [ "stun:stun.stunprotocol.org" ] } ]
 
+const needsNullCandidate =  navigator.userAgent.match(/Firefox/) !== null;
+const candidateRe = /a=(candidate:.*)/;
+
 export class FlockClient extends EventTarget {
     constructor (options) {
         super();
@@ -361,12 +364,9 @@ export class FlockClient extends EventTarget {
             throw TypeError('\'url\' property required on options');
 
         var url = new URL(options.url);
-        console.log("Got options", options);
 
         if ( options.hasOwnProperty('appliance') ) {
-            console.log("Adding path", encodeURIComponent(options.appliance));
             url.pathname = url.pathname + encodeURIComponent(options.appliance);
-            console.log("Path is now", url.pathname, url);
             this.state = FlockClientState.Connected;
             this.appliance = options.appliance;
         } else {
@@ -390,13 +390,13 @@ export class FlockClient extends EventTarget {
         this.localComplete = false;
 
         var thisFlockClient = this;
-        this.websocket.addEventListener('error', function() {
+        var onWsError =  function() {
             thisFlockClient.dispatchEvent(new FlockSocketErrorEvent(this, 'connection-refused'))
-        });
-        this.websocket.addEventListener('open', function (evt) {
+        };
+        var onWsOpen = function (evt) {
             thisFlockClient.dispatchEvent(new FlockOpenEvent());
-        });
-        this.websocket.addEventListener('message', (evt) => {
+        }
+        var onWsMessage =  (evt) => {
             var line = this.parseLine(evt.data)
             if ( line ) {
                 switch ( this.state ) {
@@ -463,10 +463,12 @@ export class FlockClient extends EventTarget {
                             delete this.rtc_control_channel
                         }
                         this.rtc_control_channel.onclose = function () { console.log('channel closes') }
+                        this.rtc_control_channel.onerror = this.rtc_connection.onerror = (function (e) { console.log("Error", e) })
 
                         this.answer_sent = false;
                         this.candidates = [];
 
+                        console.log('offer', this.offer)
                         this.rtc_connection.setRemoteDescription({ type: 'offer',
                                                                    sdp: this.offer})
                             .then(() => { this.onSetDescription() },
@@ -481,10 +483,7 @@ export class FlockClient extends EventTarget {
                     switch ( line.code ) {
                     case 151:
                         console.log("All remote candidates received")
-                        this.rtc_connection.addIceCandidate({candidate: "", sdpMid: "data"})
-                            .then(() => { console.log("ice candidates finished successfully") },
-                                  (err) => { console.error("failed finishing ice candidates", err) });
-                        this.signalRemoteComplete()
+                        this.onRemoteComplete()
                         break;
                     }
                     break;
@@ -500,11 +499,32 @@ export class FlockClient extends EventTarget {
                     this.sendError(new FlockErrorEvent(evt.data));
                 }
             }
-        });
+        };
+        this.websocket.addEventListener('error', onWsError);
+        this.websocket.addEventListener('open', onWsOpen);
+        this.websocket.addEventListener('message', onWsMessage);
+        this.disconnectWebsocket = () => {
+            this.websocket.removeEventListener('error', onWsError)
+            this.websocket.removeEventListener('open', onWsOpen)
+            this.websocket.removeEventListener('message', onWsMessage)
+        }
     };
+
+    onRemoteComplete() {
+        var emptyCand = { sdpMid: "data", candidate: "" }
+        if ( needsNullCandidate )
+            emptyCand = null;
+        this.rtc_connection.addIceCandidate(emptyCand)
+            .then(() => { console.log("ice candidates finished successfully") },
+                  (err) => { console.error("failed finishing ice candidates", err) });
+        this.signalRemoteComplete()
+        window.conn = this.rtc_connection
+        window.chan = this.rtc_control_channel
+    }
 
     signalRemoteComplete () {
         if ( this.state != FlockClientState.Complete ) {
+            console.log("Signal remote complete", this.remoteComplete, this.localComplete)
             this.state = FlockClientState.Complete;
 
             this.remoteComplete = true;
@@ -514,6 +534,8 @@ export class FlockClient extends EventTarget {
 
     socketCompletes () {
         this.websocket.close()
+        this.disconnectWebsocket()
+        this.disconnectWebsocket = null
         delete this.websocket
     }
 

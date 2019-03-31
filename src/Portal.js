@@ -6,7 +6,7 @@ import { Set } from 'immutable';
 import { Login, lookupLogins, getSite, getLoginsDb,
          resetLogins, rememberPermissions, lookupSavedPermissions } from './Logins.js';
 import { AuthenticatorModal } from './Authenticator.js';
-import { parseAppUrl } from './polyfill/Common.js';
+import { parseAppUrl, getCertificateFingerprints } from './polyfill/Common.js';
 import { updateApp, AppInstallItem } from './polyfill/Updates.js';
 import { LoadingIndicator } from './react.js';
 
@@ -241,14 +241,16 @@ export class PortalAuthenticator extends EventTarget('open', 'error') {
     startPortalAuth() {
         var { contentWindow, display } = this.portalFrameWindow
 
-        contentWindow.postMessage(
-            { type: 'start-auth',
-              permissions: this.permissions,
-              ttl: 30 * 60, // TODO accept as an argument
-              siteFingerprints: this.site.getFingerprints().map(wrtcToFingerprint).filter((c) => c !== null),
-              flocks: [ this.chosenFlock ],
-              display },
-            this.portalOrigin)
+        getCertificateFingerprints(this.site).then((fps) => {
+            contentWindow.postMessage(
+                { type: 'start-auth',
+                  permissions: this.permissions,
+                  ttl: 30 * 60, // TODO accept as an argument
+                  siteFingerprints: fps.map(wrtcToFingerprint).filter((c) => c !== null),
+                  flocks: [ this.chosenFlock ],
+                  display },
+                this.portalOrigin)
+        })
     }
 
     requestPortalAuth() {
@@ -772,12 +774,13 @@ export class PortalServer {
     }
 
     requestNuclear(site) {
-        return this.requestPermissions([ 'intrustd+perm://admin.intrustd.com/login',
-                                         'intrustd+perm://admin.intrustd.com/site',
-                                         'intrustd+perm://admin.intrustd.com/nuclear' ],
-                                       7 * 24 * 60 * 60, // One week
-                                       site.getFingerprints().map(wrtcToFingerprint).filter((c) => c !== null))
-
+        return getCertificateFingerprints(site).then((fps) => {
+            return this.requestPermissions([ 'intrustd+perm://admin.intrustd.com/login',
+                                             'intrustd+perm://admin.intrustd.com/site',
+                                             'intrustd+perm://admin.intrustd.com/nuclear' ],
+                                           7 * 24 * 60 * 60, // One week
+                                           fps.map(wrtcToFingerprint).filter((c) => c !== null))
+        })
     }
 
     onResetLogins() {

@@ -75,7 +75,6 @@ function redirectedRequest(resp, req) {
 
     if ( (resp.status >= 301 && resp.status <= 303) ||
          (resp.status >= 307 && resp.status <= 308) ) {
-        console.log("Redir", validRedirect(req.url, loc))
         switch (resp.status) {
         case 301:
             // TODO cache this
@@ -292,7 +291,6 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
         })
         this.socket.addEventListener('data', (e) => {
             var dataBuffer = Buffer.from(e.data)
-            //console.log("Got response", dataBuffer)
             this.responseParser.execute(dataBuffer)
         })
         this.socket.addEventListener('close', () => {
@@ -521,7 +519,6 @@ export default function ourFetch (req, init) {
                                 })
 
                                 cache.then((cache) => {
-                                    // console.log("Got response", resp.response);
                                     var responseInit = { status: resp.response.status,
                                                          statusText: resp.response.statusText,
                                                          headers: resp.response.headers };
