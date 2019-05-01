@@ -109,6 +109,10 @@ export class Image extends React.Component {
             })
     }
 
+    reload() {
+        this.updateSource(this.props.src)
+    }
+
     render () {
         if ( this.state.srcUrl ) {
             var props = Object.assign({}, this.props);

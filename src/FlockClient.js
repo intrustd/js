@@ -376,6 +376,7 @@ export class FlockClient extends EventTarget {
         if ( options.hasOwnProperty('site') )
             this.certificate = options.site
 
+        this.vcardData = "";
         this.personas = [];
         this.applications = {};
         this.rtc_stream_number = 0;
@@ -420,6 +421,7 @@ export class FlockClient extends EventTarget {
                         break;
                     case 403:
                         // Authenticate now
+                        this.parseVCardData(this.vcardData)
                         this.state = FlockClientState.ReadyToLogin;
                         this.dispatchEvent(new FlockNeedsPersonasEvent(this));
                         break;
@@ -492,7 +494,8 @@ export class FlockClient extends EventTarget {
                 }
             } else {
                 if ( this.state == FlockClientState.CollectingPersonas ) {
-                    this.parseVCardData(evt.data);
+                    this.vcardData += evt.data;
+                    console.log("Got vcard data", this.vcardData)
                 } else if ( this.state == FlockClientState.StartIce ) {
                     this.offer = evt.data;
                 } else {
@@ -588,6 +591,11 @@ export class FlockClient extends EventTarget {
                                 id: vc['X-INTRUSTDID'][0].value };
                     if ( vc.hasOwnProperty('fn') )
                         ret.displayname = vc['fn'][0].value;
+                    if ( vc.hasOwnProperty('photo') ) {
+                        ret.photo = vc['photo'][0].value;
+                        if ( ret.photo instanceof Array )
+                            ret.photo = ret.photo.join(";")
+                    }
                     return ret;
                 } else return null
             }).filter((vc) => vc !== null)

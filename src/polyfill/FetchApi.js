@@ -271,7 +271,7 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
 
                         headers.set('Content-Length', length + '')
                         if ( contentType !== undefined && contentType !== null &&
-                             !headers.has('Content-type') ) {
+                             this.request.headers['Content-type'] === undefined ) {
                             headers.set('Content-type', contentType)
                         }
                         doSendBody = () => { this.sendBody(bodyStream) }

@@ -11,6 +11,16 @@ import { PermissionsError } from "./Portal.js";
 import { lookupWellKnownFlock } from "./Permalink.js";
 import { getAppliances, touchAppliance } from "./Logins.js";
 
+function zp(l) {
+    if ( l.length == 0 ) return '00';
+    if ( l.length == 1 ) return `0${l}`;
+    else return l
+}
+
+function lerp(t, s, e) {
+    return Math.floor(s + t * (e - s))
+}
+
 export function makeAbsoluteUrl(url) {
     var a = document.createElement('a')
     a.href = url
@@ -182,17 +192,44 @@ export class AuthenticatorModal extends React.Component {
                              E('ul', {className: 'intrustd-list intrustd-persona-list'},
                                this.state.personas.map(
                                    (p, ix) => {
-                                       var loginBox
+                                       var loginBox, avatar
 
                                        if ( this.state.selectedPersona == ix )
-                                           loginBox = E('input', { className: 'intrustd-form-input', ref: this.passwordRef,
+                                           loginBox = E('input', { className: 'intrustd-form-input intrustd-login-box-password', ref: this.passwordRef,
                                                                    onKeyDown: this.onKeyDown.bind(this),
+                                                                   autoFocus: true,
                                                                    type: 'password', placeholder: 'Password' })
+
+                                       if ( p.photo ) {
+                                           avatar = E('div', { className: 'intrustd-avatar',
+                                                               style: { backgroundImage: `url(${p.photo})` } })
+                                       } else {
+                                           var r, g, b
+
+                                           console.log("No photos")
+
+                                           r = parseInt(p.id.substring(0, 2), 16) / 255
+                                           g = parseInt(p.id.substring(4, 6), 16) / 256
+                                           b = parseInt(p.id.substring(10, 12), 16) / 256
+
+                                           r = lerp(r, 76, 200)
+                                           g = lerp(g, 76, 200)
+                                           b = lerp(b, 76, 200)
+
+                                           var sty =  { backgroundColor: `#${zp(r.toString(16))}${zp(g.toString(16))}${zp(b.toString(16))}` }
+                                           console.log("Got style", sty);
+
+                                           avatar = E('div', { className: 'intrustd-avatar intrustd-avatar--initials',
+                                                               style: sty },
+                                                      p.displayname[0])
+                                       }
 
                                        return E('li', {key: p.id, className: (this.state.selectedPersona == ix ? 'active' : ''),
                                                        onClick: () => { this.selectPersona(ix) }},
-                                                E('div', {className: 'intrustd-display-name'}, p.displayname),
-                                                loginBox)
+                                                avatar,
+                                                E('div', { className: 'intrustd-login' },
+                                                  E('div', {className: 'intrustd-display-name'}, p.displayname),
+                                                  loginBox))
                                    })))
             }
         } else if ( typeof this.state.appliances == 'object' ) {
