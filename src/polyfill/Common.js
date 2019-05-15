@@ -31,7 +31,7 @@ export function parseAppUrl(url) {
     case 'intrustd+app:':
         if ( host.startsWith('//') ) {
             var info = host.substr(2).split('/');
-            if ( info.length >= 2 ) {
+            if ( info.length >= 2 ) { // TODO doesn't always work on Safari
                 return { isApp: true,
                          app: info[0],
                          path: '/' + info.slice(1).join('/') + url_obj.search,

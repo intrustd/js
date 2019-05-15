@@ -206,8 +206,6 @@ export class AuthenticatorModal extends React.Component {
                                        } else {
                                            var r, g, b
 
-                                           console.log("No photos")
-
                                            r = parseInt(p.id.substring(0, 2), 16) / 255
                                            g = parseInt(p.id.substring(4, 6), 16) / 256
                                            b = parseInt(p.id.substring(10, 12), 16) / 256
@@ -217,7 +215,6 @@ export class AuthenticatorModal extends React.Component {
                                            b = lerp(b, 76, 200)
 
                                            var sty =  { backgroundColor: `#${zp(r.toString(16))}${zp(g.toString(16))}${zp(b.toString(16))}` }
-                                           console.log("Got style", sty);
 
                                            avatar = E('div', { className: 'intrustd-avatar intrustd-avatar--initials',
                                                                style: sty },
@@ -408,8 +405,9 @@ class LoginBox extends React.Component {
                  error,
                  E('div', { className: 'intrustd-login-form' },
                    E('div', { className: 'intrustd-form-row' },
-                     E('div', { className: 'form-control' },
-                       E('input', { className: 'form-input', name: 'intrustd-password',
+                     E('div', { className: 'form-group' },
+                       E('input', { className: 'form-control', name: 'intrustd-password',
+                                    autoFocus: true,
                                     placeholder: 'Password', type: 'password',
                                     ref: this.passwordBoxRef,
                                     onKeyDown: this.onKeyDown.bind(this) }))),
