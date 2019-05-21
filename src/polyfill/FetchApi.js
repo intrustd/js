@@ -418,7 +418,8 @@ export default function ourFetch (req, init) {
                                             cache: req.cache,
                                             redirect: req.redirect,
                                             referrer: req.referrer,
-                                            integrity: req.integrity })
+                                            integrity: req.integrity,
+                                            headers: req.headers })
                 return oldFetch.apply(this, [ req ])
             }
 
