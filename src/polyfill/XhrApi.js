@@ -219,7 +219,7 @@ export default class OurXMLHttpRequest extends EventTarget {
     }
 
     _handleResponse(rsp) {
-        console.log("Got response", rsp)
+//        console.log("Got response", rsp)
         // At this point, all headers are fetched
         this._setReadyState(oldXMLHttpRequest.HEADERS_RECEIVED)
 
@@ -240,7 +240,7 @@ export default class OurXMLHttpRequest extends EventTarget {
             }
         };
 
-        console.log("Attempting to consume body", rsp.body)
+//        console.log("Attempting to consume body", rsp.body)
         this._status = rsp.status
         this._statusText = rsp.statusText
         this._rspHeaders = rsp.headers
@@ -251,26 +251,6 @@ export default class OurXMLHttpRequest extends EventTarget {
         this._headers[header] = value
     }
 
-
-    _makeReadableStream (body) {
-        if ( body === undefined || body === null ) {
-            return null
-        } else if ( body instanceof String || typeof body == 'string' ) {
-            throw new TypeError("TODO String")
-        } else if ( body instanceof FormData ) {
-            var boundary = generateFormBoundary()
-            this.setRequestHeader("Content-Type", boundary.contentType)
-
-            return makeFormDataStream(body, boundary.boundary)
-        } else if ( body instanceof URLSearchParams ) {
-            throw new TypeError("TODO URLSearchParams")
-        } else if ( body instanceof BufferSource ) {
-            throw new TypeError("TODO BufferSource")
-        } else if ( body instanceof Document ) {
-            throw new TypeError("TODO Document")
-        }
-    }
-
     _send(body) {
         if ( this._isapp ) {
             var requestInit =
@@ -279,7 +259,7 @@ export default class OurXMLHttpRequest extends EventTarget {
 
             switch ( this._method ) {
             default:
-                requestInit.body = this._makeReadableStream(body)
+                requestInit.body = body
             case 'GET':
             case 'HEAD':
                 break;
@@ -288,18 +268,18 @@ export default class OurXMLHttpRequest extends EventTarget {
             var timeout = this._makeTimeoutPromise().then(() => { return { type: 'timeout' } })
 
             requestInit.intrustdOnProgress = (e) => {
-                console.log("Got progress event", e)
+//                console.log("Got progress event", e)
                 this.dispatchEvent(e)
             }
 
-            console.log("Send XHR request", requestInit)
+//            console.log("Send XHR request", requestInit)
             var fetchPromise = ourFetch(this._url, requestInit)
                 .then((rsp) => { return { type: 'response', rsp: rsp } },
                       (err) => { return { type: 'error', err: err } })
 
             Promise.race([timeout, fetchPromise])
                 .then((res) => {
-                    console.log("Raced")
+//                    console.log("Raced")
                     switch ( res.type ) {
                     case 'timeout':
                         this._handleTimeout()

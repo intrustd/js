@@ -15,9 +15,15 @@ var oldFetch = window.fetch;
 var globalFlocks = {};
 var globalAppliance;
 
+const PROGRESS_DEBOUNCE_INTERVAL = 500;
+
 if ( !window.ReadableStream ) {
     var streamsPolyfill = require('web-streams-polyfill')
     window.ReadableStream = streamsPolyfill.ReadableStream;
+}
+
+function shouldCache({status}) {
+    return true
 }
 
 function makeAbsoluteUrl(url, base) {
@@ -162,6 +168,8 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
         this.decoder = new TextDecoder()
         this.responseParser = new HTTPParser(HTTPParser.RESPONSE)
 
+        this.deferredProgress = null
+
         this.response = {
             credentials: 'same-origin',
             mode: 'no-cors',
@@ -248,7 +256,7 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
 
             this.socket.send(stsLine)
             var doSendBody = () => {
-                this.sendProgressEvent(50, 50)
+                this.sendProgressEvent(50, 50, true)
             }
             var continueSend = () => {
                 for ( var header of headers ) {
@@ -266,7 +274,7 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
                 bodyLengthCalculated =
                     this.calculateBodyLength(this.request.body)
                     .then(({length, bodyStream, contentType}) => {
-                        this.sendProgressEvent(0, length)
+                        this.sendProgressEvent(0, length, true)
                         this.bodyLength = length
 
                         headers.set('Content-Length', length + '')
@@ -282,7 +290,7 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
                         this.cleanupSocket()
                     })
             } else
-                this.sendProgressEvent(0, 50)
+                this.sendProgressEvent(0, 50, true)
 
             bodyLengthCalculated
                 .then(() => {
@@ -304,7 +312,7 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
     sendBody(bodyStream) {
         this.socket.sendStream(bodyStream, (sent) => {
             //console.log("Sending", sent)
-            this.sendProgressEvent(sent, this.bodyLength)
+            this.sendProgressEvent(sent, this.bodyLength, false)
         })
     }
 
@@ -317,9 +325,37 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
         this.dispatchEvent(new HTTPPartialLoadEvent(this, loaded))
     }
 
-    sendProgressEvent(length, total) {
-        this.dispatchEvent(new ProgressEvent('progress', { lengthComputable: true,
-                                                           loaded: length, total: total }))
+    _cancelDeferredProgress() {
+        if ( this.deferredProgress ) {
+            clearTimeout(this.deferredProgress.timeout)
+            this.deferredProgress = null
+        }
+    }
+
+    _deliverDeferredProgress() {
+        var { progress } = this.deferredProgress
+        this.deferredProgress = null
+        this.dispatchEvent(progress)
+    }
+
+    sendProgressEvent(length, total, imm) {
+        var evt = new ProgressEvent('progress', { lengthComputable: true,
+                                                  loaded: length, total: total })
+        if ( length >= total )
+            imm = true
+
+        if ( imm ) {
+            this._cancelDeferredProgress()
+            this.dispatchEvent(evt)
+        } else {
+            if ( this.deferredProgress )
+                this.deferredProgress.progress = evt
+            else {
+                this.deferredProgress = { progress: evt }
+                this.deferredProgress.timeout = setTimeout(this._deliverDeferredProgress.bind(this),
+                                                           PROGRESS_DEBOUNCE_INTERVAL)
+            }
+        }
     }
 
     cleanupSocket() {
@@ -339,8 +375,10 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
                                      bodyStream: BlobReader(blob) })
         } else if ( body instanceof FormData ) {
             var boundary = generateFormBoundary()
-            return this.calculateBodyLengthStream(makeFormDataStream(body, boundary.boundary))
-                .then((o) => { o.contentType = boundary.contentType; return o })
+            var { stream, length } = makeFormDataStream(body, boundary.boundary)
+            return Promise.resolve({ length,
+                                     bodyStream: stream,
+                                     contentType: boundary.contentType })
         } else if ( body instanceof BufferSource ) {
             return Promise.reject(new TypeError("TODO BufferSource send"))
         } else if ( body instanceof URLSearchParams ) {
@@ -507,7 +545,8 @@ export default function ourFetch (req, init) {
                             var cacheControl = parseCacheControl(resp.response.headers)
 
                             if ( req.method == 'GET' &&
-                                 (req.cache != 'no-store' && !cacheControl.noStore) ) {
+                                 (req.cache != 'no-store' && !cacheControl.noStore) &&
+                                 shouldCache(resp.response) ) {
                                 var cache = new Promise((resolve, reject) => {
                                     if ( dev._intrustdCache === undefined ) {
                                         dev._intrustdCache = new CacheControl(dev.flockUrl,

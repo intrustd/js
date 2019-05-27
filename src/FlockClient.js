@@ -238,17 +238,17 @@ export class FlockSocket extends EventTarget {
 
     // Returns a promise of when the stream is sent
     sendStream( stream, onProgress ) {
-        const MAX_CHUNK_SIZE = 8192;
+        const MAX_CHUNK_SIZE = 1024 * 1024;
         return new Promise((resolve, reject) => {
             var reader = stream.getReader()
             var curChunk = null
             var sent = 0
 
             var sendNextChunk = (sentInThisLoop) => {
-                console.log("Sending next chunk", this.data_chan.bufferedAmount, sentInThisLoop)
+//                console.log("Sending next chunk", this.data_chan.bufferedAmount, sentInThisLoop)
                 this.data_chan.onbufferedamountlow = null;
                 if ( this.data_chan.bufferedAmount > MAX_CHUNK_SIZE ) {
-                    console.log("Waiting for buffer", this.data_chan.bufferedAmount)
+//                    console.log("Waiting for buffer", this.data_chan.bufferedAmount)
                     waitForMore()
                 } else if ( sentInThisLoop > MAX_CHUNK_SIZE ) {
                     // If we've sent too much in this loop, use setTimeout to allow a chance to redraw
@@ -265,7 +265,7 @@ export class FlockSocket extends EventTarget {
                             this.send(curChunk)
 
                             if ( onProgress ) {
-                                console.log("Progress", sent + curChunk.byteLength)
+//                                console.log("Progress", sent + curChunk.byteLength)
                                 onProgress(sent + curChunk.byteLength)
                             }
                             sent += curChunk.byteLength

@@ -15,58 +15,69 @@ export function generateFormBoundary() {
 }
 
 const FormDataMode = {
-    BOUNDARY: Symbol('BOUNDARY'),
-    FIELD: Symbol('FIELD'),
+    ITEM: Symbol('ITEM'),
     STREAM: Symbol('STREAM'),
-    WAITING: Symbol('WAITING'),
-    DONE: Symbol('DONE')
+    WAITING: Symbol('WAITING')
 };
 
+
 export function makeFormDataStream(formData, boundary) {
-    var items = formData.entries()[Symbol.iterator]()
+    var items = [], length = 0
+    const itemBoundary = { raw: `--${boundary}\r\n` }
+
+    const pushRaw = (raw) => {
+        items.push({raw})
+        length += raw.length
+    }
+    const pushBoundary = () => {
+        items.push(itemBoundary)
+        length += itemBoundary.raw.length
+    }
+    const pushStream = (stream) => {
+        items.push({stream})
+        length += stream.size
+    }
+
+    for ( var [name, value] of formData.entries() )  {
+        pushBoundary()
+        if ( value instanceof File ) {
+            pushRaw(`Content-Disposition: form-data; name="${name}"; filename="${value.name}"\r\nContent-Type: ${value.type}\r\n\r\n`)
+            pushStream(value)
+            pushRaw('\r\n')
+        } else {
+            console.error("Can't handle non-file", value)
+            throw new TypeError("TODO can't handle non-file")
+        }
+    }
+    if ( items.length > 0 ) {
+        const end = `--${boundary}--\r\n`
+        items.push({ raw:  end})
+        length += end.length
+    }
+
+    var oldItems = items
+    items = items[Symbol.iterator]()
     var currentItem = items.next()
     var sentItem = false
 
-    var mode = { mode: FormDataMode.BOUNDARY }
-
-    if ( sizeOnly === undefined )
-        sizeOnly = false
+    var mode = { mode: FormDataMode.ITEM }
 
     var enqueueNext = (controller) => {
-        if ( mode.mode == FormDataMode.DONE ) {
-            controller.close()
-            return
-        }
-
         if ( currentItem.done ) {
-            if ( sentItem ) {
-                mode = { mode: FormDataMode.DONE }
-                controller.enqueue(`--${boundary}--\r\n`)
-            }
             controller.close()
         } else {
             switch ( mode.mode ) {
-            case FormDataMode.BOUNDARY:
-                sentItem = true
-                controller.enqueue(`--${boundary}\r\n`)
-                mode = { mode: FormDataMode.FIELD, name: currentItem.value[0],
-                         value: currentItem.value[1] }
-                enqueueNext(controller)
-                break;
+            case FormDataMode.ITEM:
+                if ( currentItem.value.raw ) {
+                    controller.enqueue(currentItem.value.raw)
+                    currentItem = items.next()
 
-            case FormDataMode.FIELD:
-                if ( mode.value instanceof File ) {
-                    controller.enqueue(`Content-Disposition: form-data; name="${mode.name}"; filename="${mode.value.name}"\r\n`)
-                    controller.enqueue(`Content-Type: ${mode.value.type}\r\n\r\n`)
-
-                    var stream = BlobReader(mode.value)
-//                    stream = stream.pipeThrough(new Base64Encoder())
-                    mode = { mode: FormDataMode.STREAM, stream: stream.getReader() }
-                } else {
-                    console.error("Can't handle non-file", mode.value)
-                    throw new TypeError("TODO can't handle non-files")
+                    enqueueNext(controller)
+                } else if ( currentItem.value.stream ) {
+                    mode = { mode: FormDataMode.STREAM,
+                             stream: (new BlobReader(currentItem.value.stream)).getReader() }
+                    enqueueNext(controller)
                 }
-                enqueueNext(controller)
                 break;
 
             case FormDataMode.STREAM:
@@ -74,8 +85,7 @@ export function makeFormDataStream(formData, boundary) {
                     var chunk = value
                     if ( done ) {
                         currentItem = items.next()
-                        controller.enqueue('\r\n')
-                        mode = { mode: FormDataMode.BOUNDARY }
+                        mode = { mode: FormDataMode.ITEM }
                         enqueueNext(controller)
                     } else {
                         if ( mode.mode == FormDataMode.WAITING ) {
@@ -92,7 +102,7 @@ export function makeFormDataStream(formData, boundary) {
         }
     }
 
-    return new ReadableStream({
+    var stream = new ReadableStream({
         start (controller) {
             enqueueNext(controller)
         },
@@ -101,4 +111,6 @@ export function makeFormDataStream(formData, boundary) {
             enqueueNext(controller)
         }
     })
+
+    return { stream, length }
 }
