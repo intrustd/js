@@ -52,7 +52,7 @@ export class UploadButton extends React.Component {
     }
 }
 
-export class Image extends React.Component {
+export class ImageHost extends React.Component {
     constructor() {
         super()
         this.state = {
@@ -115,14 +115,27 @@ export class Image extends React.Component {
 
     render () {
         if ( this.state.srcUrl ) {
-            var props = Object.assign({}, this.props);
-            delete props.src;
-            delete props.onFirstLoad
-            props.src = this.state.srcUrl;
-
-            return E('img', props);
+            return this.props.renderImg(this.state.srcUrl)
         } else
-            return E('span', null, 'loading');
+            return this.props.renderLoad()
+    }
+}
+
+export class Image extends React.Component {
+    render() {
+        return E(ImageHost, { src: this.props.src,
+                              onFirstLoad: this.props.onFirstLoad,
+                              renderImg: (src) => {
+                                  var props = Object.assign({}, this.props);
+                                  delete props.src;
+                                  delete props.onFirstLoad;
+                                  props.src = src
+
+                                  return E('img', props)
+                              },
+                              renderLoad: () => {
+                                  return E('span', null, 'loading')
+                              } })
     }
 }
 

@@ -60,10 +60,61 @@ export default class OurXMLHttpRequest extends EventTarget {
             return this._xhr[propName]
     }
 
+    _getResponseText() {
+        if ( this.responseType != '' &&
+             this.responseType != 'text' )
+            throw TypeError("responseType is not text or empty string")
+
+        return this._decodeResponseText()
+    }
+
+    _decodeResponseText() {
+        var decoder = new TextDecoder()
+        var t = ""
+        this._responseChunks.map((c) => { t += decoder.decode(c) })
+
+        this._responseText = t
+        return t
+    }
+
+    _getResponse() {
+        switch ( this.responseType ) {
+        case 'arraybuffer':
+            var totalLength = 0;
+            this._responseChunks.map((c) => { totalLength += c.length })
+            var r = new ArrayBuffer(totalLength), curPos = 0
+            var dest = new Uint8Array(r)
+            this._responseChunks.map((c) => {
+                dest.set(c, curPos)
+                curPos += c.length
+            })
+
+            return r
+
+        case 'blob':
+            var r = new Blob(this._responseChunks.map((c) => c.buffer),
+                             { type: this.getResponseHeader('content-type') })
+            return r
+
+        case 'document':
+            var dp = new DOMParser()
+            var d = dp.parseFromString(this._decodeResponseText(),
+                                       this.response.getResponseHeader('content-type'))
+            return d
+
+        case 'json':
+            return JSON.parse(this._decodeResponseText())
+
+        case 'text':
+        case '':
+            return this.responseText
+        }
+    }
+
     // Read-only properties
     get readyState() { return this._internalProp("readyState") }
-    get response() { return this._internalProp("response") }
-    get responseText() { return this._internalProp("responseText") }
+    get response() { return this._internalProp("response", "_getResponse") }
+    get responseText() { return this._internalProp("responseText", "_getResponseText") }
     get responseURL() { return this._internalProp("responseURL") }
     get responseXML() { return this._internalProp("responseXML") }
     get status() { return this._internalProp("status") }
@@ -115,6 +166,7 @@ export default class OurXMLHttpRequest extends EventTarget {
 
                 this._method = method
                 this._url = url
+                this._responseChunks = []
                 this._response = this._responseText = this._responseURL = ""
                 this._responseXML = null
                 this._status = 0
@@ -171,14 +223,12 @@ export default class OurXMLHttpRequest extends EventTarget {
         // At this point, all headers are fetched
         this._setReadyState(oldXMLHttpRequest.HEADERS_RECEIVED)
 
-        var decoder = new TextDecoder()
         var sink = {
             start: (controller) => {
             },
 
             write: (chunk, controller) => {
-                console.log("Got chunk", chunk)
-                this._responseText += decoder.decode(chunk)
+                this._responseChunks.push(chunk)
             },
 
             close: (controller) => {

@@ -78,6 +78,9 @@ export default function install(options) {
     window.XMLHttpRequest = ourXMLHttpRequest
     window.fetch = ourFetch
     window.WebSocket = ourWebSocket
+
+    if ( options.oninstall )
+        setTimeout(options.oninstall, 0)
 }
 
 window.installIntrustd = install

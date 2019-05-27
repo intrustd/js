@@ -29,9 +29,10 @@ export function makeFormDataStream(formData, boundary) {
 
     var mode = { mode: FormDataMode.BOUNDARY }
 
+    if ( sizeOnly === undefined )
+        sizeOnly = false
 
     var enqueueNext = (controller) => {
-        //console.log("enqueueNext")
         if ( mode.mode == FormDataMode.DONE ) {
             controller.close()
             return
@@ -46,8 +47,6 @@ export function makeFormDataStream(formData, boundary) {
         } else {
             switch ( mode.mode ) {
             case FormDataMode.BOUNDARY:
-                console.log("Got entry", currentItem)
-
                 sentItem = true
                 controller.enqueue(`--${boundary}\r\n`)
                 mode = { mode: FormDataMode.FIELD, name: currentItem.value[0],
@@ -59,7 +58,6 @@ export function makeFormDataStream(formData, boundary) {
                 if ( mode.value instanceof File ) {
                     controller.enqueue(`Content-Disposition: form-data; name="${mode.name}"; filename="${mode.value.name}"\r\n`)
                     controller.enqueue(`Content-Type: ${mode.value.type}\r\n\r\n`)
-//                    controller.enqueue('Content-transfer-encoding: base64\r\n\r\n')
 
                     var stream = BlobReader(mode.value)
 //                    stream = stream.pipeThrough(new Base64Encoder())
@@ -81,7 +79,6 @@ export function makeFormDataStream(formData, boundary) {
                         enqueueNext(controller)
                     } else {
                         if ( mode.mode == FormDataMode.WAITING ) {
-                            //console.log("Enqueue", chunk)
                             controller.enqueue(chunk)
                             mode = mode.oldMode;
                             enqueueNext(controller)
