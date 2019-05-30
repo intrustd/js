@@ -3,7 +3,7 @@ import { EventTarget } from 'event-target-shim';
 import { HTTPParser } from 'http-parser-js';
 import { FlockClient } from "../FlockClient.js";
 import { Authenticator, attemptLogin } from "../Authenticator.js";
-import { parseAppUrl, appCanonicalUrl, getClientPromise, parseCacheControl } from "./Common.js";
+import { parseAppUrl, appCanonicalUrl, getClientPromise, parseCacheControl, parseDate } from "./Common.js";
 import { generateFormBoundary, makeFormDataStream } from "./FormData.js";
 import { BlobReader } from "./Streams.js";
 import { CacheControl } from "./Cache.js";
@@ -22,8 +22,78 @@ if ( !window.ReadableStream ) {
     window.ReadableStream = streamsPolyfill.ReadableStream;
 }
 
-function shouldCache({status}) {
+function needsValidation(rsp) {
+    var cacheControl = parseCacheControl(rsp.headers)
+
+    if ( cacheControl.noCache || cacheControl.mustRevalidate )
+        return true // Always revalidate
+
+    // Check expiry
+    if ( rsp.headers.has('date') ) {
+        var date = new Date(rsp.headers.get('date'))
+        if ( date.getTime() == date.getTime() ) {
+            if ( cacheControl.maxAge ) {
+                var now = new Date()
+                var secondsSince = (now - date) / 1000
+                return secondsSince > cacheControl.maxAge
+            }
+        }
+    }
+
+    if ( rsp.headers.has('expires') ) {
+        var expires = new Date(rsp.headers.get('expires'))
+        if ( expires.getTime() == expires.getTime() ) {
+            return expires > new Date();
+        }
+    }
+
     return true
+}
+
+function shouldUseCached(req, rsp) {
+    return new Promise((resolve, reject) => {
+        switch ( req.cache ) {
+        case 'reload':
+        case 'no-store':
+            resolve({ useCached: false });
+            break;
+        case 'force-cache':
+        case 'only-if-cached': // TODO
+            resolve({ useCached: true });
+            break;
+        case 'default':
+        default:
+            if ( rsp !== undefined && needsValidation(rsp) ) {
+                // Attempt revalidation using ETag
+                if ( rsp.headers.has('etag') ) {
+                    var etag = rsp.headers.get('etag')
+
+                    // Attempt revalidation
+                    resolve({ useCached: 'revalidate', etag })
+                } else
+                    resolve({ useCached: false })
+            } else {
+                // Otherwise, we should just use the cached one
+                resolve({ useCached: rsp !== undefined });
+            }
+            break;
+        }
+    })
+}
+
+function shouldCache(req, rsp) {
+    var cacheControl = parseCacheControl(rsp.headers)
+
+    if ( req.method == 'GET' ) {
+        if ( req.cache == 'no-store' || cacheControl.noStore )
+            return false;
+
+        if ( req.cache == 'reload' )
+            return true;
+
+        return (req.cache != 'no-store' && !cacheControl.noStore)
+    } else
+        return false;
 }
 
 function makeAbsoluteUrl(url, base) {
@@ -542,11 +612,8 @@ export default function ourFetch (req, init) {
                                 }
                             }
 
-                            var cacheControl = parseCacheControl(resp.response.headers)
 
-                            if ( req.method == 'GET' &&
-                                 (req.cache != 'no-store' && !cacheControl.noStore) &&
-                                 shouldCache(resp.response) ) {
+                            if ( shouldCache(req, resp.response) ) {
                                 var cache = new Promise((resolve, reject) => {
                                     if ( dev._intrustdCache === undefined ) {
                                         dev._intrustdCache = new CacheControl(dev.flockUrl,
@@ -592,11 +659,20 @@ export default function ourFetch (req, init) {
                              req.method == 'GET' ) {
                             return dev._intrustdCache.matchRequest(req)
                                 .then((rsp) => {
-                                    if ( rsp === undefined )
-                                        return runRequest(dev)
-                                    else {
-                                        return rsp
-                                    }
+                                    console.log("Matched cache", rsp)
+                                    return shouldUseCached(req, rsp).then(({ useCached, etag }) => {
+                                        if ( useCached == 'revalidate' ) {
+                                            console.log("Try using validation")
+                                            req.headers.set('If-None-Match', etag);
+                                            return runRequest(dev).then((r) => {
+                                                if ( r.status == 304 )
+                                                    return Promise.resolve(rsp);
+                                                else
+                                                    return Promise.resolve(r);
+                                            })
+                                        } else if ( useCached ) return Promise.resolve(rsp);
+                                        else return runRequest(dev);
+                                    })
                                 })
                         } else {
                             return runRequest(dev)
