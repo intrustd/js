@@ -3,9 +3,9 @@ import React from 'react';
 import ReactDom from 'react-dom';
 import { Set } from 'immutable';
 
-import { Login, lookupLogins, getSite, getLoginsDb,
+import { Login, lookupLogins, lookupLogin, getSite, getLoginsDb,
          resetLogins, rememberPermissions, lookupSavedPermissions } from './Logins.js';
-import { AuthenticatorModal } from './Authenticator.js';
+import { AuthenticatorModal, ReauthModal } from './Authenticator.js';
 import { parseAppUrl, getCertificateFingerprints } from './polyfill/Common.js';
 import { updateApp, AppInstallItem } from './polyfill/Updates.js';
 import { LoadingIndicator } from './react.js';
@@ -37,11 +37,21 @@ function wrtcToFingerprint({ algorithm, value }) {
 
 function findPortalApp(flocks, oldFetch) {
     var attempts = flocks.map((flock, ix) => () => {
-        var proto = ''
-        if ( flock.secure )
-            proto = 'https:';
+        var proto = '', url
+        if ( typeof flock == "string" ) {
+            var flockUrl = new URL(flock, location.href)
+            if ( flockUrl.protocol == 'wss:' || flockUrl.protocol == 'https:' ) {
+                proto = 'https:';
+            }
+            url = flockUrl.host;
+        } else {
+            url = flock.url
+            if ( flock.secure ) {
+                proto = 'https:';
+            }
+        }
 
-        return oldFetch(`${proto}//${flock.url}/portal`,
+        return oldFetch(`${proto}//${url}/portal`,
                  { method: 'GET' })
             .then((rsp) => rsp.text())
             .then((portalUrl) => `${portalUrl}#intrustd-auth`)
@@ -176,6 +186,152 @@ class PortalAuthOpensEvent {
     constructor(client) {
         this.type = 'open';
         this.device = client;
+    }
+}
+
+class DelegationFailedEvent {
+    constructor(msg) {
+        this.type = 'error';
+        this.msg = msg;
+    }
+}
+
+class DelegationSucceededEvent {
+    constructor({token, persona, flockUrl, applianceName, exp}) {
+        this.permissionsAccepted = true
+        this.type = 'success'
+        this.token = token
+        this.persona = persona
+        this.flock = flockUrl
+        this.appliance = applianceName
+        this.exp = exp
+    }
+}
+
+class DelegationRejectedEvent {
+    constructor() {
+        this.type = 'success'
+        this.permissionsAccepted = false
+    }
+}
+
+export class DelegatedTokenAuthenticator extends EventTarget('success', 'error') {
+    constructor(intrustd, token) {
+        super()
+        var {flock, persona, appliance} = intrustd
+        this.token = token
+        this.flock = flock
+        this.persona = persona
+        this.appliance = appliance
+        findPortalApp([flock], fetch)
+            .then(({flock, portalUrl}) => {
+                this.portalUrl = portalUrl
+                this.portalOrigin = (new URL(portalUrl)).origin
+
+                console.log("Got portal", portalUrl)
+                return openPortalFrame(portalUrl).then((iframe) => {
+                    this.portalFrame = iframe
+                    this.attachWindowMessageHandler()
+                    this.startDelegatedAuth()
+                })
+            })
+    }
+
+    finish() {
+        if ( this.windowMessageHandler !== undefined ) {
+            window.removeEventListener('message', this.windowMessageHandler)
+            delete this.windowMessageHandler
+        }
+
+        if ( this.modalContainer !== undefined )
+            this.hide()
+
+        if ( this.portalFrame !== undefined &&
+             this.portalFrame instanceof HTMLIFrameElement ) {
+            this.portalFrame.parentNode.removeChild(this.portalFrame)
+            delete this.portalFrame
+        } else if ( this.portalFrame !== undefined ) {
+            this.portalFrameWindow.contentWindow.postMessage({ type: 'finish-auth' }, this.portalOrigin)
+        }
+    }
+
+    hide() {
+        document.body.removeChild(this.modalContainer)
+        delete this.modalContainer
+    }
+
+    attachWindowMessageHandler () {
+        if ( this.windowMessageHandler === undefined ) {
+            this.windowMessageHandler = this.onWindowMessage.bind(this)
+            window.addEventListener('message', this.windowMessageHandler)
+        }
+    }
+
+    onWindowMessage(msg) {
+        if ( msg.origin == this.portalOrigin ) {
+            if ( msg.data == 'no-such-login' ) {
+                this.dispatchEvent(new DelegationFailedEvent('No such login'))
+            } else if ( msg.data == 'no-such-delegation' ) {
+                this.dispatchEvent(new DelegationFailedEvent(`No such delegation: ${this.token}`))
+            } else if ( msg.data == 'show-portal' ) {
+                this.showPortal()
+            } else {
+                if ( msg.data.success ) {
+                    this.dispatchEvent(new DelegationSucceededEvent(msg.data))
+                } else {
+                    this.dispatchEvent(new DelegationRejectedEvent())
+                }
+            }
+        } else
+            console.log("Ignoring message with wrong origin", msg)
+    }
+
+    showPortal() {
+        if ( this.portalFrame instanceof HTMLIFrameElement ) {
+            console.log(this.portalFrame, this.portalFrame.parentNode)
+            this.portalFrame.parentNode.removeChild(this.portalFrame)
+            delete this.portalFrame
+        }
+
+        this.openPopup()
+    }
+
+    openPopup() {
+        this.portalFrame = window.open(this.portalUrl, 'intrustd-login-popup', 'width=500,height=500')
+        if ( this.portalFrame === null ) {
+            this.state = PortalModalState.NeedsPopup
+            this.doPopup = () => this.openPopup()
+            this.render()
+        } else {
+            this.state = PortalModalState.RequestingPermissions
+            this.requestDelegatedAuth()
+        }
+    }
+
+    get portalFrameWindow() {
+        var display = PortalDisplay.Popup
+        var contentWindow = this.portalFrame
+        if ( this.portalFrame instanceof HTMLIFrameElement ) {
+            display = PortalDisplay.Hidden
+            contentWindow = contentWindow.contentWindow
+        }
+        return { contentWindow, display }
+    }
+
+    requestDelegatedAuth() {
+        // TODO timeout until this succeeds
+        setTimeout(() => { this.startDelegatedAuth() }, 500)
+    }
+
+    startDelegatedAuth(flock, persona, appliance, token) {
+        var { contentWindow, display } = this.portalFrameWindow
+        var { token, flock, persona, appliance } = this
+
+        console.log("Starting delegated auth again")
+
+        contentWindow.postMessage({ type: 'start-delegation', display,
+                                    token, flock, persona, appliance },
+                                  this.portalOrigin)
     }
 }
 
@@ -349,11 +505,9 @@ export class PortalAuthenticator extends EventTarget('open', 'error') {
         if ( this.portalFrame === null ) {
             this.state = PortalModalState.NeedsPopup
             this.doPopup = () => this.openPopup()
-            this.render()
         } else {
             this.state = PortalModalState.RequestingPermissions
             this.requestPortalAuth()
-            this.render()
         }
     }
 
@@ -552,6 +706,7 @@ export const PortalServerState = {
     WaitingToStart: Symbol('WaitingToStart'),
     LookingUpLogins: Symbol('LookingUpLogins'),
     NewLogin: Symbol('NewLogin'),
+    Relogin: Symbol('Relogin'),
     LoginOne: Symbol('LoginOne'),
     DisplayLogins: Symbol('DisplayLogins'),
     Connecting: Symbol('Connecting'),
@@ -567,6 +722,7 @@ export const PortalServerState = {
 
 export class PortalServer {
     constructor() {
+        console.log("Starting portal server")
         this.state = PortalServerState.WaitingToStart;
         this.modalShown = false;
         this.display = PortalDisplay.Hidden;
@@ -614,6 +770,27 @@ export class PortalServer {
 
                         this.showDisplay()
                     })
+            } else if ( type == 'start-delegation' && this.state == PortalServerState.WaitingToStart ) {
+                console.log("Start delegation")
+                this.state = PortalServerState.LookingUpLogins
+                this.delegated = true
+                this.delegationToken = e.data.token
+                this.display = e.data.display
+                this.origin = e.origin
+                this.flock = e.data.flock
+                this.persona = e.data.persona
+                this.appliance = e.data.appliance
+                this.respond = (r) => {
+                    e.source.postMessage(r, e.origin)
+                }
+                lookupLogin(e.data.persona, e.data.flock, e.data.appliance)
+                    .then((login) => {
+                        this.selectLoginForDelegation(login)
+                        this.showDisplay()
+                    }, (e) => {
+                        this.state = PortalServerState.Relogin
+                        this.showDisplay()
+                    })
             } else if ( type == 'finish-auth' ) {
                 window.close()
             }
@@ -637,10 +814,87 @@ export class PortalServer {
             })
     }
 
+    selectLoginForDelegation(login) {
+        this.state = PortalServerState.Connecting;
+
+        console.log("Creating login client")
+        login.createClient()
+            .then((client) => {
+                this.flockClient = client
+                //                this.makePreview()
+                this.continueWithDelegation()
+            })
+            .catch((e) => {
+                this.state = PortalServerState.Error;
+                this.error = e;
+                this.showDisplay()
+            })
+    }
+
+    continueWithDelegation() {
+        var permissionsPromise =
+            fetch(`intrustd+app://admin.intrustd.com/tokens/delegated/${this.delegationToken}`,
+                  { method: 'GET' })
+            .then((r) => {
+                if ( r.ok ) {
+                    return r.json().then((r) => {
+                        console.log("GOt perms", r)
+                        return r
+                    })
+                } else
+                    return Promise.reject()
+            })
+
+        Promise.all([permissionsPromise,
+                     lookupSavedPermissions(this.origin)])
+            .then(([neededPerms, granted]) => {
+                console.log("Needed", neededPerms, "granted", granted)
+                this.required = Set(neededPerms.perms).subtract(granted).toArray()
+                if ( this.required.length == 0 ) {
+                    this.mintDelegatedToken()
+                } else {
+                    this.tokenPreview = neededPerms
+                    this.state = PortalServerState.AskForConfirmation
+                    this.showDisplay()
+                }
+            })
+            .catch((e) => {
+                console.error(e)
+                this.respond('no-such-delegation')
+            })
+    }
+
+    mintDelegatedToken(shouldRememberPermissions) {
+        fetch(`intrustd+app://admin.intrustd.com/tokens/delegated/${this.delegationToken}`,
+              { method: 'POST' })
+            .then((r) => {
+                if ( r.ok ) {
+                    var onComplete = Promise.resolve();
+
+                    if ( shouldRememberPermissions ) {
+                        onComplete = rememberPermissions(this.origin, this.tokenPreview.perms)
+                    }
+
+                    console.log("Got delegated token")
+
+                    return onComplete.then(() => r.json())
+                        .then(({token, expiration}) => {
+                            this.respond({ success: true,
+                                           persona: this.flockClient.personaId,
+                                           flockUrl: this.flockClient.flockUrl,
+                                           applianceName: this.flockClient.appliance,
+                                           exp: new Date(expiration).getTime(), token })
+                    })
+                } else {
+                    this.respond({ success: false })
+                }
+            })
+    }
+
     showDisplay() {
-        if ( this.display == PortalDisplay.Hidden )
+        if ( this.display == PortalDisplay.Hidden ) {
             this.requestDisplay()
-        else
+        } else
             this.updateModal()
     }
 
@@ -667,17 +921,24 @@ export class PortalServer {
     }
 
     makePreview() {
-        this.state = PortalServerState.LoadingTokenPreview;
+        var fetchOpts = { method: 'POST',
+                          headers: { 'Content-type': 'application/json' },
+                          appClient: this.flockClient },
+            url = 'intrustd+app://admin.intrustd.com/tokens/preview'
+
+        this.state = PortalServerState.LoadingTokenPreview
         this.tokenPreview = null
         this.showDisplay()
 
-        fetch('intrustd+app://admin.intrustd.com/tokens/preview',
-              { method: 'POST',
-                headers: { 'Content-type': 'application/json' },
-                body: JSON.stringify(this.mkTokenRequest(this.allRequestedPermissions,
-                                                         this.request.ttl,
-                                                         this.request.siteFingerprints)),
-                appClient: this.flockClient })
+        if ( this.delegated ) {
+            url = `intrustd+app://admin.intrustd.com/tokens/delegated/${this.delegationToken}`
+            fetchOpts.method = 'GET'
+        } else
+            fetchOpts.body = JSON.stringify(this.mkTokenRequest(this.allRequestedPermissions,
+                                                                this.request.ttl,
+                                                                this.request.siteFingerprints))
+
+        fetch(url, fetchOpts)
             .then((r) => {
                 var badStatus = () => {
                     this.state = PortalServerState.AskForConfirmation
@@ -705,19 +966,25 @@ export class PortalServer {
                     badStatus()
             })
             .catch((e) => {
+                console.error("Could not fetch token preview:", e)
                 this.state = PortalServerState.AskForConfirmation
                 this.tokenPreview = { error: 'Error while getting permissions list' };
                 this.showDisplay()
             })
     }
 
-    onSuccess(flockClient) {
+    badLogin() {
+        this.respond('no-such-login')
+    }
+
+    createNewLogin(flockClient) {
         this.flockClient = flockClient
         this.state = PortalServerState.MintingToken
 
         // Request the nuclear permission for this computer
 
-        getLoginsDb().then(getSite)
+        console.log("Creating new token", flockClient)
+        return getLoginsDb().then(getSite)
             .then((site) => {
                 return  this.requestNuclear(site)
                     .then((nuclearToken) => { return { nuclearToken, site }; })
@@ -732,6 +999,8 @@ export class PortalServer {
                 login.save()
 
                 this.makePreview()
+
+                return login
             })
     }
 
@@ -804,8 +1073,17 @@ export class PortalServer {
     }
 
     onAccept(shouldRememberPermissions) {
+        if ( this.delegated ) {
+            this.mintDelegatedToken(shouldRememberPermissions)
+        } else {
+            this.mintNewToken(shouldRememberPermissions)
+        }
+    }
+
+    mintNewToken(shouldRememberPermissions) {
         // Attempt to make a token using this site ID
         var permissions = this.allRequestedPermissions
+        var mintTokenPromise
 
         this.requestPermissions(permissions, this.request.ttl, this.request.siteFingerprints)
             .then(({token, expiration}) => {
@@ -900,7 +1178,19 @@ export class PortalServer {
                                                 { key: 'new-login',
                                                   origin: this.origin,
                                                   flocks: this.flocks,
-                                                  onSuccess: this.onSuccess.bind(this) }),
+                                                  onSuccess: this.createNewLogin.bind(this) }),
+                            this.modalContainer)
+            break;
+
+        case PortalServerState.Relogin:
+            ReactDom.render(React.createElement(ReauthModal,
+                                                { key: 'relogin',
+                                                  origin: this.origin,
+                                                  flock: this.flock,
+                                                  appliance: this.appliance,
+                                                  persona: this.persona,
+                                                  onSuccess: this.createNewLogin.bind(this),
+                                                  onApplianceNotFound: this.badLogin.bind(this) }),
                             this.modalContainer)
             break;
 
@@ -914,7 +1204,6 @@ export class PortalServer {
                                                   appProgress: this.applicationProgress,
                                                   installApps: this.doInstallApps.bind(this),
                                                   tokenPreview: this.tokenPreview,
-                                                  permissions: this.request.permissions,
                                                   onResetLogins: this.onResetLogins.bind(this),
                                                   onSuccess: this.onAccept.bind(this),
                                                   onRetryAfterInstall: this.makePreview.bind(this),

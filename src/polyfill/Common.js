@@ -25,7 +25,7 @@ export function parseAppUrl(url) {
 
     var host = url_obj.pathname;
 
-    console.log("Got url obj", host)
+    console.log("Got url obj", host, url_obj)
 
     switch ( url_obj.protocol ) {
     case 'intrustd+app:':

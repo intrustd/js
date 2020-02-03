@@ -4,10 +4,11 @@ import React from 'react';
 import ReactDom from 'react-dom';
 
 import { FlockClient } from './FlockClient.js';
+import { LoadingIndicator } from './react.js';
 
 import "./Common.scss";
 import "./Authenticator.scss";
-import { PermissionsError } from "./Portal.js";
+import { PermissionsError, DelegatedTokenAuthenticator } from "./Portal.js";
 import { lookupWellKnownFlock } from "./Permalink.js";
 import { getAppliances, touchAppliance } from "./Logins.js";
 
@@ -28,14 +29,15 @@ export function makeAbsoluteUrl(url) {
 }
 
 export function addTokens(tokens, options) {
+    console.log("Adding tokens", tokens)
     return fetch('intrustd+app://admin.intrustd.com/me/tokens',
-                 Object.assign({ data: JSON.stringify(tokens),
+                 Object.assign({ body: JSON.stringify({tokens}),
                                  headers: { 'Content-type': 'application/json' },
                                  method: 'POST' }, options))
         .then((r) => {
             if ( r.status != 200 )
-                r.json().then((details) => {
-                    throw new PermissionsError(`Invalid status: ${r.status}: ${JSON.stringify(details)}`)
+                r.text().then((details) => {
+                    throw new PermissionsError(`Invalid status: ${r.status}: ${details}`)
                 }, () => {
                     throw new PermissionsError(`Invalid status: ${r.status}`)
                 })
@@ -62,6 +64,9 @@ export function mintToken(perms, options) {
     if ( site !== undefined )
         request.site = site
 
+    if ( options.delegationOk )
+        request.delegation_ok = true
+
     var tokenPromise =
         fetch('intrustd+app://admin.intrustd.com/tokens',
                  { method: 'POST',
@@ -70,7 +75,28 @@ export function mintToken(perms, options) {
         .then((r) => {
             switch ( r.status ) {
             case 200:
-                return r.json().then(({token}) => { return { r, token } })
+                return r.json().then(({token, delegated}) => {
+                    if ( delegated && options.delegationOk ) {
+                        return new Promise((resolve, reject) => {
+                            var tokenAuth = new DelegatedTokenAuthenticator(r.intrustd, token)
+                            var onError = (e) => {
+                                tokenAuth.finish()
+                                reject(new PermissionsError(e.msg))
+                            }
+                            var onSuccess = ({ permissionsAccepted, token }) => {
+                                tokenAuth.finish()
+                                if ( permissionsAccepted )
+                                    resolve({token})
+                                else
+                                    reject(new PermissionsError('User rejected new permissions'))
+                            }
+                            tokenAuth.addEventListener('error', onError)
+                            tokenAuth.addEventListener('success', onSuccess)
+                        })
+                    } else {
+                        return { r, token }
+                    }
+                })
             case 400:
                 return Promise.reject(new PermissionsError("Unknown"))
             case 401:
@@ -111,10 +137,16 @@ export function mintToken(perms, options) {
 function loginToAppliance(flocks, appliance) {
     var attempts = flocks.map((flock, flockIndex) => () => {
         return new Promise((resolve, reject) => {
-            var protocol = flock.secure ? 'wss' : 'ws';
-            var path = flock.path ? flock.path : '';
-            var client = new FlockClient({ url: `${protocol}://${flock.url}${path}`,
-                                           appliance })
+            var url
+            if ( typeof flock == 'string' )
+                url = flock;
+            else {
+                var protocol = flock.secure ? 'wss' : 'ws';
+                var path = flock.path ? flock.path : '';
+                url = `${protocol}://${flock.url}${path}`;
+            }
+
+            var client = new FlockClient({ url, appliance })
 
             var onError = (e) => {
                 removeEventListeners()
@@ -311,6 +343,102 @@ export class AuthenticatorModal extends React.Component {
     }
 }
 
+export class ReauthModal extends React.Component {
+    constructor() {
+        super ()
+        this.passwordRef = React.createRef()
+        this.state = { state: 'connecting' }
+    }
+
+    componentDidMount() {
+        loginToAppliance([this.props.flock], this.props.appliance)
+            .then((dev) => {
+                this.setState({device: dev})
+                return touchAppliance(this.props.appliance)
+                    .then(() => this.findPersona(dev))
+            })
+            .catch((e) => {
+                this.props.onApplianceNotFound()
+            })
+    }
+
+    findPersona(dev) {
+        var matching = dev.personas.filter(({id}) => id == this.props.persona)
+        if ( matching.length == 0 )
+            this.props.onApplianceNotFound()
+        else {
+            this.setState({ persona: matching[0],
+                            state: 'login' })
+        }
+    }
+
+    onKeyDown(e) {
+        if ( e.keyCode == 13 )
+            this.submit()
+    }
+
+    submit() {
+        var pw = this.passwordRef.current.value;
+        this.setState({state: 'authenticating'})
+        console.log("Device", this.state.device)
+        this.state.device.tryLogin(this.props.persona, `pwd:${pw}`)
+            .then(() => {
+                console.log("Signal success")
+                this.props.onSuccess(this.state.device)
+                this.setState({state: 'complete'})
+            })
+            .catch((e) => {
+                this.setState({error: true, state: 'login'})
+                this.passordRef.current.value = '';
+            })
+    }
+
+    render() {
+        const E = React.createElement
+        var body, avatar, error
+
+        switch ( this.state.state ) {
+        case 'connecting':
+            body = E(LoadingIndicator);
+            break;
+        case 'authenticating':
+        case 'login':
+            if ( this.state.persona.photo )
+                avatar = E('div', { className: 'intrustd-avatar',
+                                    style: { backgroundImage: `url(${this.state.persona.photo})` }})
+            body = E('ul', { className: 'intrustd-list intrustd-persona-list' },
+                     E('li', null,
+                       avatar,
+                       E('div', { className: 'intrustd-login' },
+                         E('div', { className: 'intrustd-display-name' }, this.state.persona.displayname),
+                         E('input', { className: 'intrustd-form-input',
+                                      ref: this.passwordRef,
+                                      disabled: this.state.state == 'authenticating',
+                                      onKeyDown: this.onKeyDown.bind(this),
+                                      autoFocus: true,
+                                      type: 'password', placeholder: 'Password' }))),
+
+                     this.state.state == 'authenticating' ? E(LoadingIndicator) : null )
+        default:
+        }
+
+        if ( this.state.error )
+            error = E('div', { className: 'intrustd-form-error' },
+                      'Invalid credentials')
+
+        return E('div', { className: 'intrust-auth-modal intrustd-modal' },
+                 E('header', { className: 'intrustd-modal-header' },
+                   E('h3', null, 'Confirm your identity')),
+                 E('p', { className: 'intrustd-auth-explainer' },
+                   this.props.explanation ||
+                   'You need to confirm your identity to proceed'),
+                 error,
+                 E('div', { className: 'intrustd-login-form' },
+                   E('div', { className: 'intrustd-form-row' },
+                     body)))
+    }
+}
+
 export class Authenticator extends EventTarget('open', 'error') {
     constructor(flocks, site) {
         super();
@@ -374,7 +502,7 @@ class LoginBox extends React.Component {
                   { method: 'POST',
                     body: pw })
                 .then((r) => {
-                    if ( r.status == 200 ) {
+                    if ( r.ok ) {
                         this.props.onSuccess()
                         this.setState({loading: false})
                     } else {

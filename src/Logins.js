@@ -140,6 +140,24 @@ export function getSite(db) {
         });
 }
 
+export function lookupLogin(persona, flock, appliance) {
+    var now = Date.now()
+    return getLoginsDb()
+        .then((db) => {
+            return Promise.all([getSite(db),
+                                db.login.where('[persona_id+flock+appliance]')
+                                .equals([persona, flock, appliance]).toArray()])
+                .then(([site, logins]) => {
+                    console.log("GOt login", JSON.stringify(logins))
+                    logins = logins.filter((login) => new Date(login.exp) > now)
+                    if ( logins.length == 0 )
+                        return Promise.reject()
+                    else
+                        return new Login(logins[0])
+                })
+        })
+}
+
 export function lookupLogins() {
     var now = Date.now()
     return getLoginsDb()
