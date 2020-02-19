@@ -32,19 +32,10 @@ export function parseAppUrl(url) {
     switch ( url_obj.protocol ) {
     case 'intrustd+app:':
         return { isApp: true,
-                 app: host
-        if ( host.startsWith('//') ) {
-            var info = host.substr(2).split('/');
-            if ( info.length >= 2 ) { // TODO doesn't always work on Safari
-                return { isApp: true,
-                         app, port,
-                         path: `${url_obj.pathname}${url_obj.query}`,
-                         urlData: url_obj
-                       };
-            }
-        }
-        return { isApp: true, error: "Expected intrustd+app://app.domain/",
-                 urlData: url_obj};
+                 app, port,
+                 path: `${url_obj.pathname}${url_obj.query}`,
+                 urlData: url_obj
+               };
     default:
         return { isApp: false, urlData: url_obj };
     }
