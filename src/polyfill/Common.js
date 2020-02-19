@@ -3,6 +3,7 @@ import { PermalinkAuthenticator, isPermalink } from "../Permalink.js";
 import { doUpdate } from './Updates.js';
 
 import ourFetch from './FetchApi.js';
+import parseUrl from 'url-parse';
 
 var oldFetch = window.fetch;
 
@@ -15,7 +16,7 @@ export function parseAppUrl(url) {
         base = location.href
 
     try {
-        url_obj = new URL(url, base);
+        url_obj = parseUrl(url, base)
     } catch (e) {
         if ( e instanceof TypeError ) {
             return { isApp: false, urlData: null }
@@ -23,19 +24,21 @@ export function parseAppUrl(url) {
             throw e
     }
 
-    var host = url_obj.pathname;
-
-    console.log("Got url obj", host, url_obj)
+    var app = url_obj.hostname
+    var port = parseInt(url_obj.por)
+    if ( port != port ) // NaN
+        port = 80
 
     switch ( url_obj.protocol ) {
     case 'intrustd+app:':
+        return { isApp: true,
+                 app: host
         if ( host.startsWith('//') ) {
             var info = host.substr(2).split('/');
             if ( info.length >= 2 ) { // TODO doesn't always work on Safari
                 return { isApp: true,
-                         app: info[0],
-                         path: '/' + info.slice(1).join('/') + url_obj.search,
-                         port: 80, // TODO,
+                         app, port,
+                         path: `${url_obj.pathname}${url_obj.query}`,
                          urlData: url_obj
                        };
             }

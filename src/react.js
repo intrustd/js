@@ -42,7 +42,7 @@ export class UploadButton extends React.Component {
         delete attrs.elName
         delete attrs.name
         delete attrs.onUpload
-        attrs.onClick = (e) => { this.startUpload(e) }
+        attrs.onClick = (e) => { this.startUpload(e); }
 
         return E(this.props.elName, attrs,
                  E('input', {type: 'file', multiple: true, style: { display: 'none'},
@@ -134,7 +134,7 @@ export class Image extends React.Component {
                                   return E('img', props)
                               },
                               renderLoad: () => {
-                                  return E('span', null, 'loading')
+                                  return E('span', { className: 'intrustd-img-loading' }, ' ')
                               } })
     }
 }
@@ -179,7 +179,7 @@ export class PersonaButton extends React.Component {
     constructor () {
         super()
 
-        this.state = {}
+        this.state = { dropped: false }
     }
 
     componentDidMount() {
@@ -209,10 +209,14 @@ export class PersonaButton extends React.Component {
                 else
                     personaInfo = persona_id
 
-                return E('li', {className: 'intrustd-persona-button'},
+                return E('li', {className: 'intrustd-persona-button',
+                                tabIndex: 1,
+                                onClick: () => { this.setState({dropped: !this.state.dropped}) },
+                                onBlur: () => { this.setState({dropped: false}) } },
                          E('div', { className: 'intrustd-persona-name' }, personaInfo),
-                         E('div', {className: 'uk-navbar-dropdown'},
-                           E('ul', {className: 'uk-nav uk-navbar-dropdown-nav'},
+                         E('div', {className: 'intrustd-persona-dropdown',
+                                   style: { display: this.state.dropped ? 'block' : 'none' } },
+                           E('ul', {className: 'intrustd-persona-dropdown-nav'},
                              E('li', null,
                                E('dl', {className: 'intrustd-persona-info'},
                                  E('dt', {className: 'intrustd-persona-info-item--appliance'}, 'Appliance'),

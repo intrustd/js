@@ -9,6 +9,7 @@ import { BlobReader } from "./Streams.js";
 import { CacheControl } from "./Cache.js";
 import { doUpdate } from "./Updates.js";
 import ProgressManager from "./Progress.js";
+import parseUrl from 'url-parse';
 
 var oldFetch = window.fetch;
 
@@ -20,6 +21,19 @@ const PROGRESS_DEBOUNCE_INTERVAL = 500;
 if ( !window.ReadableStream ) {
     var streamsPolyfill = require('web-streams-polyfill')
     window.ReadableStream = streamsPolyfill.ReadableStream;
+}
+
+// Some statuses imply that there is no body. The response constructor
+// must be given a null body in these cases, or it will error
+function responseHasNoBody(sts) {
+    switch ( sts ) {
+    case 101:
+    case 204:
+    case 205:
+    case 304:
+        return true;
+    default: return false;
+    }
 }
 
 function needsValidation(rsp) {
@@ -97,14 +111,23 @@ function shouldCache(req, rsp) {
 }
 
 function makeAbsoluteUrl(url, base) {
-    return (new URL(url, base)).toString()
+    var origUrl = parseUrl(base)
+    var absUrl = parseUrl(url, base)
+    console.log("GOt abs url url=", url, " base=", base, " origUrl.host=",origUrl.host, " absUrl.host=", absUrl.host)
+    if ( origUrl.host == absUrl.host ) {
+        // If the server sends an absolute url in response that
+        // redirects back to the same host, then we need to assume the
+        // protocol should be changed.
+        absUrl.set('protocol', 'intrustd+app:');
+    }
+    return absUrl.toString()
 }
 
-function getLocation(rsp, req) {
+function getLocation(rsp, req, origUrl) {
     if ( rsp.headers.get('location') !== null ) {
         var locs = rsp.headers.get('location').split(',')
         if ( locs.length == 1) {
-            return makeAbsoluteUrl(locs[0], req.url)
+            return makeAbsoluteUrl(locs[0], origUrl)
         } else return null
     } else
         return null;
@@ -146,8 +169,8 @@ function validRedirect(from, to) {
     return false
 }
 
-function redirectedRequest(resp, req) {
-    var loc = getLocation(resp, req)
+function redirectedRequest(resp, req, origUrl) {
+    var loc = getLocation(resp, req, origUrl)
 
     if ( (resp.status >= 301 && resp.status <= 303) ||
          (resp.status >= 307 && resp.status <= 308) ) {
@@ -162,9 +185,11 @@ function redirectedRequest(resp, req) {
             if ( !validRedirect(req.url, loc) )
                 return Response.error()
 
+            console.log("Got redirected request", loc, origUrl)
+
             return updateReq(req, { url: loc,
                                     referrer: req.url,
-                                    method: 'GET' })
+                                    method: resp.status == 301 ? req.method : 'GET' })
 
         case 308:
             // TODO cache this
@@ -300,6 +325,8 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
                 if ( frameRequested !== null )
                     window.cancelAnimationFrame(frameRequested)
                 this.sendPartialLoadEvent(totalBody)
+                if ( responseHasNoBody(this.response.status) )
+                    responseBlob = null
                 var response = new Response(responseBlob, this.response)
                 response.intrustd = { 'flock': this.socket.conn.flockUrl,
                                       'appliance': this.socket.conn.appliance,
@@ -310,7 +337,6 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
             }
 
         this.socket.addEventListener('open', () => {
-            //console.log("Going to send headers", this.request.headers)
             var headers = new Headers(this.request.headers)
             headers.append('Host', url.app)
             headers.append('Accept', '*/*')
@@ -489,10 +515,12 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
 }
 
 export default function ourFetch (req, init) {
-    var url = req;
+    var url = req, origUrl;
     if ( req instanceof Request ) {
         url = req.url;
     }
+
+    origUrl = url;
 
     var appUrl = parseAppUrl(url);
     if ( appUrl.isApp ) {
@@ -562,7 +590,7 @@ export default function ourFetch (req, init) {
                         })
 
                         httpRequestor.addEventListener('response', (resp) => {
-                            var redirect = redirectedRequest(resp.response, clonedReq)
+                            var redirect = redirectedRequest(resp.response, clonedReq, origUrl)
 
                             if ( redirect !== null ) {
                                 if ( redirect.type == 'error' ) {

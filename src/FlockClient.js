@@ -12,6 +12,8 @@ import { SocketType,
          RequestAppControlMessage, RequestAppControlResponse,
          ConnectAppControlRequest, ConnectAppControlResponse } from "./SocketProxy.js";
 
+const BUFFERED_AMOUNT_LOW_THRESHOLD = 4096 * 4;
+
 export class FlockConnectionNotOpenError extends Error {
     constructor () {
         super();
@@ -107,6 +109,13 @@ export class FlockSocket extends EventTarget {
         this.conn = flock_conn;
         this.state = 'connecting';
         this.endpoint = endpoint;
+
+        if ( this.conn.sctp )
+            this.maxMessageSize = this.conn.sctp.maxMessageSize;
+        else
+            this.maxMessageSize = 1024 * 1024;
+
+        console.log("Max message size is ", this.maxMessageSize);
 
         switch ( endpoint.type ) {
         case 'tcp':
@@ -208,6 +217,7 @@ export class FlockSocket extends EventTarget {
                 if ( onChunkSent )
                     onChunkSent(ofs)
 
+                console.log("Sending buffer of length", buffer.byteLength)
                 this.data_chan.send(buffer);
             }
 
@@ -276,7 +286,7 @@ export class FlockSocket extends EventTarget {
                 }
             }
             var waitForMore = () => {
-                this.data_chan.bufferedAmountLowThreshold = 4096;
+                this.data_chan.bufferedAmountLowThreshold = BUFFERED_AMOUNT_LOW_THRESHOLD;
                 this.data_chan.onbufferedamountlow = () => { sendNextChunk(0) };
             }
 
