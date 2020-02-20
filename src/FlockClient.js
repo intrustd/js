@@ -480,7 +480,8 @@ export class FlockClient extends EventTarget {
                         this.answer_sent = false;
                         this.candidates = [];
 
-                        console.log('offer', this.offer)
+                        console.log('Offer is:')
+                        console.log(this.offer)
                         this.rtc_connection.setRemoteDescription({ type: 'offer',
                                                                    sdp: this.offer})
                             .then(() => { this.onSetDescription() },
