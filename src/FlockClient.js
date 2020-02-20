@@ -525,7 +525,7 @@ export class FlockClient extends EventTarget {
     };
 
     onRemoteComplete() {
-        var emptyCand = { sdpMid: "data", candidate: "" }
+        var emptyCand = { sdpMid: "data", candidate: null } // Safari doesn't like the empty string, so use null
         if ( needsNullCandidate )
             emptyCand = null;
         this.rtc_connection.addIceCandidate(emptyCand)
