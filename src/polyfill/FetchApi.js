@@ -113,7 +113,6 @@ function shouldCache(req, rsp) {
 function makeAbsoluteUrl(url, base) {
     var origUrl = parseUrl(base)
     var absUrl = parseUrl(url, base)
-    console.log("GOt abs url url=", url, " base=", base, " origUrl.host=",origUrl.host, " absUrl.host=", absUrl.host)
     if ( origUrl.host == absUrl.host ) {
         // If the server sends an absolute url in response that
         // redirects back to the same host, then we need to assume the
@@ -184,8 +183,6 @@ function redirectedRequest(resp, req, origUrl) {
 
             if ( !validRedirect(req.url, loc) )
                 return Response.error()
-
-            console.log("Got redirected request", loc, origUrl)
 
             return updateReq(req, { url: loc,
                                     referrer: req.url,
@@ -275,7 +272,6 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
         this.body = []
 
         var addHeaders = (hdrs) => {
-//            console.log("Adding headers", hdrs)
             for ( var i = 0; i < hdrs.length; i += 2 ) {
                 this.response.headers.set(hdrs[i], hdrs[i + 1])
             }
@@ -348,7 +344,6 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
 
             var stsLine = this.request.method + ' ' + this.url.path + ' HTTP/1.1\r\n';
             var bodyLengthCalculated = Promise.resolve()
-            //console.log("Sending ", stsLine)
 
             this.socket.send(stsLine)
             var doSendBody = () => {
@@ -357,15 +352,12 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
             var continueSend = () => {
                 for ( var header of headers ) {
                     var hdrLn = `${header[0]}: ${header[1]}\r\n`
-                    //console.log("Header", hdrLn)
                     this.socket.send(hdrLn)
                 }
                 this.socket.send('\r\n')
-                //console.log("Sending body")
                 doSendBody()
             }
 
-            //console.log("Fetching", this.request, this.request.hasOwnProperty('body'))
             if ( this.request.hasOwnProperty('body') ) {
                 bodyLengthCalculated =
                     this.calculateBodyLength(this.request.body)
@@ -407,7 +399,6 @@ class HTTPRequester extends EventTarget('response', 'error', 'progress') {
 
     sendBody(bodyStream) {
         this.socket.sendStream(bodyStream, (sent) => {
-            //console.log("Sending", sent)
             this.sendProgressEvent(sent, this.bodyLength, false)
         })
     }
@@ -687,10 +678,8 @@ export default function ourFetch (req, init) {
                              req.method == 'GET' ) {
                             return dev._intrustdCache.matchRequest(req)
                                 .then((rsp) => {
-                                    console.log("Matched cache", rsp)
                                     return shouldUseCached(req, rsp).then(({ useCached, etag }) => {
                                         if ( useCached == 'revalidate' ) {
-                                            console.log("Try using validation")
                                             req.headers.set('If-None-Match', etag);
                                             return runRequest(dev).then((r) => {
                                                 if ( r.status == 304 )

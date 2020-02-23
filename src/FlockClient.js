@@ -363,7 +363,7 @@ const FlockClientState = {
 
 const iceServers = [ { urls: [ "stun:stun.stunprotocol.org" ] } ]
 
-const needsNullCandidate =  navigator.userAgent.match(/Firefox/) !== null;
+const needsNullCandidate =  navigator.userAgent.match(/Firefox|Safari/) !== null;
 const candidateRe = /a=(candidate:.*)/;
 
 export class FlockClient extends EventTarget {
@@ -557,6 +557,9 @@ export class FlockClient extends EventTarget {
     onSetDescription() {
         this.rtc_connection.createAnswer()
             .then((answer) => {
+                console.log("Got local description")
+                console.log(answer)
+
                 this.rtc_connection.setLocalDescription(answer)
                 this.websocket.send(answer.sdp);
 
@@ -572,6 +575,8 @@ export class FlockClient extends EventTarget {
     }
 
     sendIceCandidate(c) {
+        console.log("Sending ice candidate", c)
+        console.log(c.candidate)
         if ( c.candidate )
             this.websocket.send("a=" + c.candidate.candidate + "\r\n")
         else {

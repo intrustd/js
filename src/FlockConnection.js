@@ -169,8 +169,6 @@ export class FlockSocket extends EventTarget {
                 data = enc.encode(data).buffer;
             }
 
-            console.log("DAta is ", data);
-
             if ( data instanceof ArrayBuffer ) {
                 buffer = new ArrayBuffer(data.byteLength + DATA_HDR_SZ);
 
@@ -305,7 +303,6 @@ export class FlockConnection extends EventTarget {
     }
 
     socketTCP (app_name, port) {
-        console.log("Doing socketTCP");
         if ( this.applications.hasOwnProperty(app_name) ) {
             if ( this.rtc_conn !== null ) {
                 return new FlockSocket(this, { type: 'tcp',
@@ -364,8 +361,6 @@ export class FlockConnection extends EventTarget {
             }
 
             var listener = ( e ) => {
-                console.log("Got message event", e);
-
                 if ( cur_timer !== null ) {
                     clearTimeout(cur_timer);
                     cur_timer = null;
@@ -392,7 +387,6 @@ export class FlockConnection extends EventTarget {
         var apps = this.apps_requested.slice();
 
         // Attempt to send data on channel
-        console.log("Requesting apps");
         this.requestApps(apps)
             .then(() => { this.dispatchEvent(new FlockConnectionOpensEvent(this)); })
             .catch((e) => {
