@@ -2,6 +2,7 @@ import React from 'react';
 
 import { parseAppUrl } from './polyfill/Common.js';
 import { resetLogins } from './Logins.js';
+import IntrustdImage from './polyfill/Image.js';
 
 import './react.scss';
 
@@ -53,18 +54,23 @@ export class UploadButton extends React.Component {
 }
 
 export class ImageHost extends React.Component {
-    constructor() {
+    constructor(props) {
         super()
+
         this.state = {
             firstLoad: false,
             srcUrl: null,
             curBlob: null
         };
+
+        this.updateSource(props.src, (newState) => {
+            this.state = Object.assign({}, this.state, newState)
+        })
     }
 
-    componentDidMount () {
-        this.updateSource(this.props.src)
-    }
+    // componentDidMount () {
+    //     this.updateSource(this.props.src)
+    // }
 
     componentWillUnmount() {
         this.freeBlob()
@@ -72,7 +78,8 @@ export class ImageHost extends React.Component {
 
     freeBlob() {
         if ( this.state.isBlob ) {
-            URL.revokeObjectURL(this.state.srcUrl)
+            if ( this.state.shouldRevoke )
+                URL.revokeObjectURL(this.state.srcUrl)
             this.setState({ isBlob: false, srcUrl: null })
         }
     }
@@ -82,31 +89,44 @@ export class ImageHost extends React.Component {
             this.updateSource(this.props.src)
     }
 
-    dispatchFirstLoad() {
+    dispatchFirstLoad(setState) {
         if ( !this.state.firstLoad ) {
-            this.setState({firstLoad: true})
-            if ( this.props.onFirstLoad )
-                this.props.onFirstLoad()
+            setState({firstLoad: true})
+            if ( this.props !== undefined && this.props.onFirstLoad )
+                setTimeout(() => this.props.onFirstLoad(), 0)
         }
     }
 
-    updateSource(newSrc) {
+    updateSource(newSrc, setState) {
         this.freeBlob()
 
-        this.setState({srcUrl: null, isBlob: false})
-        var parsed = parseAppUrl(newSrc)
-        fetch(newSrc, { method: 'GET'})
-            .then((d) => d.blob().then((b) => {
-                return {contentType: d.headers.get('content-type'),
-                        blob: b}
-            }))
-            .then(({contentType, blob}) => {
-                var curBlob = URL.createObjectURL(blob);
-                this.setState({srcUrl: curBlob,
-                               isBlob: true})
+        if ( setState === undefined )
+            setState = this.setState.bind(this)
 
-                this.dispatchFirstLoad()
-            })
+        if ( newSrc instanceof IntrustdImage ) {
+            if ( newSrc.loaded ) {
+                setState({srcUrl: newSrc.blobUrl, isBlob: true, shouldRevoke: false })
+                this.dispatchFirstLoad(setState)
+            } else {
+                newSrc.loadPromise.then(() => this.updateSource(newSrc))
+            }
+        } else {
+            setState({srcUrl: null, isBlob: false, shouldRevoke: false})
+            var parsed = parseAppUrl(newSrc)
+            fetch(newSrc, { method: 'GET'})
+                .then((d) => d.blob().then((b) => {
+                    return {contentType: d.headers.get('content-type'),
+                            blob: b}
+                }))
+                .then(({contentType, blob}) => {
+                    var curBlob = URL.createObjectURL(blob);
+                    this.setState({srcUrl: curBlob,
+                                   isBlob: true,
+                                   shouldRevoke: true})
+
+                    this.dispatchFirstLoad(setState)
+                })
+        }
     }
 
     reload() {
@@ -164,7 +184,7 @@ export class Form extends React.Component {
         var url = props.action
         if ( this.isApp ) {
             props = Object.assign({}, props)
-            props.action = "javascript:void(0)"
+            props.action = ""
             props.onSubmit = (e) => { this.onFormSubmit(e) }
         }
         delete props.children

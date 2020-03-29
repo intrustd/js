@@ -115,8 +115,6 @@ export class FlockSocket extends EventTarget {
         else
             this.maxMessageSize = 1024 * 1024;
 
-        console.log("Max message size is ", this.maxMessageSize);
-
         switch ( endpoint.type ) {
         case 'tcp':
             this.data_chan = this.conn.newDataChannel({});
@@ -217,7 +215,6 @@ export class FlockSocket extends EventTarget {
                 if ( onChunkSent )
                     onChunkSent(ofs)
 
-                console.log("Sending buffer of length", buffer.byteLength)
                 this.data_chan.send(buffer);
             }
 
@@ -255,7 +252,7 @@ export class FlockSocket extends EventTarget {
             var sent = 0
 
             var sendNextChunk = (sentInThisLoop) => {
-//                console.log("Sending next chunk", this.data_chan.bufferedAmount, sentInThisLoop)
+                console.log("Sending next chunk", this.data_chan.bufferedAmount, sentInThisLoop)
                 this.data_chan.onbufferedamountlow = null;
                 if ( this.data_chan.bufferedAmount > MAX_CHUNK_SIZE ) {
 //                    console.log("Waiting for buffer", this.data_chan.bufferedAmount)
@@ -328,6 +325,7 @@ export class FlockSocket extends EventTarget {
     }
 
     start_tcp(port) {
+        console.log("Starting TCP")
         this.send_connection_request(SocketType.SOCK_STREAM, port);
     }
 

@@ -179,6 +179,15 @@ export default class OurXMLHttpRequest extends EventTarget {
             this._xhr.open.apply(this._xhr, arguments)
     }
 
+    _abort() {
+        this._setReadyState(oldXMLHttpRequest.UNSENT)
+        this._status = 0
+        if ( this._cancelPromise ) {
+            this._cancelPromise()
+            delete this._cancelPromise
+        }
+    }
+
     // Intrustd-based implementations
     _sendAsBinary() {
         return this._send.apply(this, arguments)
@@ -277,7 +286,9 @@ export default class OurXMLHttpRequest extends EventTarget {
                 .then((rsp) => { return { type: 'response', rsp: rsp } },
                       (err) => { return { type: 'error', err: err } })
 
-            Promise.race([timeout, fetchPromise])
+            var cancelPromise = new Promise((resolve) => { this._cancelPromise = resolve; })
+
+            Promise.race([timeout, cancelPromise, fetchPromise])
                 .then((res) => {
 //                    console.log("Raced")
                     switch ( res.type ) {
