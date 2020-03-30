@@ -252,7 +252,7 @@ export class FlockSocket extends EventTarget {
             var sent = 0
 
             var sendNextChunk = (sentInThisLoop) => {
-                console.log("Sending next chunk", this.data_chan.bufferedAmount, sentInThisLoop)
+//                console.log("Sending next chunk", this.data_chan.bufferedAmount, sentInThisLoop)
                 this.data_chan.onbufferedamountlow = null;
                 if ( this.data_chan.bufferedAmount > MAX_CHUNK_SIZE ) {
 //                    console.log("Waiting for buffer", this.data_chan.bufferedAmount)

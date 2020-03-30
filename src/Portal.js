@@ -14,6 +14,8 @@ import './Portal.scss';
 
 const E = React.createElement
 
+const needsNewFrame =  navigator.userAgent.match(/Firefox|Safari/) !== null;
+
 class MissingApps {
     constructor (missingApps) {
         this.missingApps = missingApps
@@ -229,11 +231,15 @@ export class DelegatedTokenAuthenticator extends EventTarget('success', 'error')
                 this.portalOrigin = (new URL(portalUrl)).origin
 
                 console.log("Got portal", portalUrl)
-                return openPortalFrame(portalUrl).then((iframe) => {
-                    this.portalFrame = iframe
+                if ( needsNewFrame ) {
                     this.attachWindowMessageHandler()
-                    this.startDelegatedAuth()
-                })
+                    this.openPopup();
+                } else
+                    return openPortalFrame(portalUrl).then((iframe) => {
+                        this.portalFrame = iframe
+                        this.attachWindowMessageHandler()
+                        this.startDelegatedAuth()
+                    })
             })
     }
 
