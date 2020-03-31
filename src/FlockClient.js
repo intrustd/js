@@ -689,7 +689,6 @@ export class FlockClient extends EventTarget {
         var channel = this.newDataChannel()
         return new Promise((resolve, reject) => {
             if ( this.state != FlockClientState.Complete ) {
-                console.error("State is ", this.state)
                 throw new TypeError("Can't request apps until flock client is connected")
             } else {
                 var cur_app, cur_timer = null;
@@ -725,6 +724,7 @@ export class FlockClient extends EventTarget {
                         } else {
                             var msg = new RequestAppControlMessage(cur_app);
                             cur_timer = setTimeout(canceled, 30000);
+                            console.log("Channel ready state", channel.readyState)
                             channel.send(msg.write().toArrayBuffer());
                         }
                     }
@@ -748,7 +748,22 @@ export class FlockClient extends EventTarget {
                 };
                 channel.addEventListener('message', listener);
 
-                go();
+                console.log("Channel state is", channel.readyState)
+
+                if ( channel.readyState == "open" ) {
+                    go();
+                } else {
+                    var openFn = () => {
+                        clearTimeout(cur_timer)
+                        channel.removeEventListener('open', openFn)
+                        go()
+                    }
+                    cur_timer = setTimeout(() => {
+                        window.removeEventListener('open', openFn)
+                        canceled()
+                    }, 20000)
+                    channel.addEventListener('open', openFn)
+                }
             }
         });
     }

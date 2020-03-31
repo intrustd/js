@@ -14,7 +14,9 @@ import './Portal.scss';
 
 const E = React.createElement
 
-const needsNewFrame =  navigator.userAgent.match(/Firefox|Safari/) !== null;
+const needsNewFrame =  navigator.userAgent.match(/^((?!chrome|android).)*safari/i) !== null;
+
+console.log("Needs new frame", needsNewFrame, navigator.userAgent.match(/((?!chrome|android).)*safari/i))
 
 class MissingApps {
     constructor (missingApps) {
@@ -70,20 +72,32 @@ function findPortalApp(flocks, oldFetch) {
 }
 
 function openPortalFrame(portalUrl) {
-    var iframe = document.createElement('iframe')
-    iframe.className = 'intrustd-hidden-iframe';
+    if ( needsNewFrame ) {
+        return new Promise((resolve, reject) => {
+            var frame = window.open(portalUrl, 'intrustd-login-popup', 'width=500,height=500')
+            if ( frame === null ) {
+                resolve({ needsPopup: true })
+            } else
+                resolve(frame)
+        })
+    } else {
+        var iframe = document.createElement('iframe')
+        iframe.className = 'intrustd-hidden-iframe';
 
-    document.body.appendChild(iframe)
+        console.log("Create iframe", iframe)
 
-    return new Promise((resolve, reject) => {
-        iframe.onload = () => {
-            iframe.onload = null
-            resolve(iframe)
-        }
+        document.body.appendChild(iframe)
 
-        console.log("Got portal url", portalUrl)
-        iframe.src = portalUrl;
-    })
+        return new Promise((resolve, reject) => {
+            iframe.onload = () => {
+                iframe.onload = null
+                resolve(iframe)
+            }
+
+            console.log("Got portal url", portalUrl)
+            iframe.src = portalUrl;
+        })
+    }
 }
 
 const PortalModalState = {
@@ -231,15 +245,15 @@ export class DelegatedTokenAuthenticator extends EventTarget('success', 'error')
                 this.portalOrigin = (new URL(portalUrl)).origin
 
                 console.log("Got portal", portalUrl)
-                if ( needsNewFrame ) {
-                    this.attachWindowMessageHandler()
-                    this.openPopup();
-                } else
-                    return openPortalFrame(portalUrl).then((iframe) => {
+                return openPortalFrame(portalUrl).then((iframe) => {
+                    if ( iframe.needsPopup)
+                        this.signalNeedsPopup()
+                    else {
                         this.portalFrame = iframe
                         this.attachWindowMessageHandler()
                         this.startDelegatedAuth()
-                    })
+                    }
+                })
             })
     }
 
@@ -305,13 +319,17 @@ export class DelegatedTokenAuthenticator extends EventTarget('success', 'error')
     openPopup() {
         this.portalFrame = window.open(this.portalUrl, 'intrustd-login-popup', 'width=500,height=500')
         if ( this.portalFrame === null ) {
-            this.state = PortalModalState.NeedsPopup
-            this.doPopup = () => this.openPopup()
-            this.render()
+            this.signalNeedsPopup()
         } else {
             this.state = PortalModalState.RequestingPermissions
             this.requestDelegatedAuth()
         }
+    }
+
+    signalNeedsPopup() {
+        this.state = PortalModalState.NeedsPopup
+        this.doPopup = () => this.openPopup()
+        this.render()
     }
 
     get portalFrameWindow() {
@@ -378,9 +396,13 @@ export class PortalAuthenticator extends EventTarget('open', 'error') {
                 } else {
                     return openPortalFrame(portalUrl)
                         .then((iframe) => {
-                            this.portalFrame = iframe
-                            this.attachWindowMessageHandler()
-                            this.startPortalAuth()
+                            if ( iframe.needsPopup )
+                                this.signalNeedsPopup()
+                            else {
+                                this.portalFrame = iframe
+                                this.attachWindowMessageHandler()
+                                this.startPortalAuth()
+                            }
                         })
                 }
             })
@@ -506,15 +528,18 @@ export class PortalAuthenticator extends EventTarget('open', 'error') {
 
     openPopup() {
         var src = this.portalUrl
-        console.log("Open popup")
         this.portalFrame = window.open(src, 'intrustd-login-popup', 'width=500,height=500')
         if ( this.portalFrame === null ) {
-            this.state = PortalModalState.NeedsPopup
-            this.doPopup = () => this.openPopup()
+            this.signalNeedsPopup()
         } else {
             this.state = PortalModalState.RequestingPermissions
             this.requestPortalAuth()
         }
+    }
+
+    signalNeedsPopup() {
+        this.state = PortalModalState.NeedsPopup
+        this.doPopup = () => this.openPopup()
     }
 
     doConnect() {
